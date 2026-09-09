@@ -64,7 +64,11 @@
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>CoupleConnect requires microphone access to record and send sweet encrypted voice notes to your partner.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
 	</array>
 </dict>
 </plist>

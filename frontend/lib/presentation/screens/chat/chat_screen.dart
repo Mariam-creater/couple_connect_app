@@ -3,6 +3,8 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../../../core/audio/audio_player_platform.dart';
+import '../../../core/audio/wav_audio_engine.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/models.dart';
 import '../../providers/app_state.dart';
@@ -29,16 +31,17 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   bool _isRecordingLocked = false;
   bool _isRecordingPaused = false;
   bool _isPreviewingVoice = false;
+  bool _isPreviewPlaying = false;
   int _recordingSeconds = 0;
   Timer? _recordingTimer;
   late AnimationController _recordingPulseController;
   final List<int> _recordedWaveform = [];
 
-  // --- Audio Playback State (per message) ---
+  // --- Audio Playback Engine & State (per message) ---
+  late final AudioPlayerPlatform _audioPlayer = WavAudioEngine.createPlayer();
   final Map<int, bool> _playingVoiceMessages = {};
   final Map<int, double> _voiceProgress = {};
   final Map<int, double> _voicePlaybackSpeed = {}; // 1.0, 1.5, 2.0
-  Timer? _playbackTimer;
 
   @override
   void initState() {
@@ -67,8 +70,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _audioPlayer.stop();
     _recordingTimer?.cancel();
-    _playbackTimer?.cancel();
     _typingSimulationTimer?.cancel();
     _recordingPulseController.dispose();
     _textController.dispose();
@@ -79,11 +82,13 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
   // --- VOICE RECORDING METHODS ---
   void _startVoiceRecording() {
+    _audioPlayer.stop();
     setState(() {
       _isRecordingVoice = true;
       _isRecordingLocked = false;
       _isRecordingPaused = false;
       _isPreviewingVoice = false;
+      _isPreviewPlaying = false;
       _recordingSeconds = 0;
       _recordedWaveform.clear();
     });
@@ -113,6 +118,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   }
 
   void _cancelVoiceRecording() {
+    _audioPlayer.stop();
     _recordingTimer?.cancel();
     _recordingPulseController.stop();
     setState(() {
@@ -120,18 +126,50 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       _isRecordingLocked = false;
       _isRecordingPaused = false;
       _isPreviewingVoice = false;
+      _isPreviewPlaying = false;
       _recordingSeconds = 0;
       _recordedWaveform.clear();
     });
   }
 
   void _finishToPreview() {
+    _audioPlayer.stop();
     _recordingTimer?.cancel();
     _recordingPulseController.stop();
     setState(() {
       _isPreviewingVoice = true;
       _isRecordingPaused = true;
+      _isPreviewPlaying = false;
     });
+  }
+
+  void _togglePreviewPlayback() {
+    if (_isPreviewPlaying) {
+      _audioPlayer.pause();
+      setState(() {
+        _isPreviewPlaying = false;
+      });
+    } else {
+      final wavBytes = WavAudioEngine.generateWavVoiceNote(
+        durationSeconds: _recordingSeconds > 0 ? _recordingSeconds : 1,
+        waveform: _recordedWaveform,
+      );
+      setState(() {
+        _isPreviewPlaying = true;
+      });
+      _audioPlayer.playBytes(
+        wavBytes,
+        speed: 1.0,
+        onProgress: (p) {},
+        onComplete: () {
+          if (mounted) {
+            setState(() {
+              _isPreviewPlaying = false;
+            });
+          }
+        },
+      );
+    }
   }
 
   void _sendVoiceRecording(AppState appState) {
@@ -139,26 +177,30 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       _cancelVoiceRecording();
       return;
     }
+    _audioPlayer.stop();
     final durationStr = '${(_recordingSeconds ~/ 60)}:${(_recordingSeconds % 60).toString().padLeft(2, '0')}';
     final waveformCopy = List<int>.from(_recordedWaveform.isEmpty ? [10, 20, 15, 28, 12, 22, 18, 8] : _recordedWaveform);
     final recordedSecs = _recordingSeconds;
 
-    _cancelVoiceRecording();
+    // Generate real 16-bit PCM 22.05kHz WAV voice note audio bytes
+    final wavBytes = WavAudioEngine.generateWavVoiceNote(
+      durationSeconds: recordedSecs,
+      waveform: waveformCopy,
+    );
+    final fileName = 'voice_note_${DateTime.now().millisecondsSinceEpoch}.wav';
 
-    // Create synthetic binary bytes for voice audio file (e.g. AAC/M4A payload)
-    final syntheticBytes = List<int>.generate(min(recordedSecs * 1024, 65536), (i) => (i * 37 + 13) % 256);
-    final fileName = 'voice_note_${DateTime.now().millisecondsSinceEpoch}.m4a';
+    _cancelVoiceRecording();
 
     appState.sendMediaMessage(
       type: 'voice',
       filename: fileName,
-      fileBytes: syntheticBytes,
+      fileBytes: wavBytes,
       caption: '🎙️ Voice Note ($durationStr)',
       extraMetadata: {
         'duration': durationStr,
         'seconds': recordedSecs,
         'waveform': waveformCopy,
-        'format': 'M4A / AAC',
+        'format': 'WAV / PCM 22.05kHz',
         'is_voice_message': true,
       },
     );
@@ -175,48 +217,75 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   }
 
   void _toggleVoicePlayback(int messageId, int totalSeconds) {
-    setState(() {
-      final isCurrentlyPlaying = _playingVoiceMessages[messageId] ?? false;
-      if (isCurrentlyPlaying) {
+    final isCurrentlyPlaying = _playingVoiceMessages[messageId] ?? false;
+    if (isCurrentlyPlaying) {
+      _audioPlayer.pause();
+      setState(() {
         _playingVoiceMessages[messageId] = false;
-        _playbackTimer?.cancel();
-      } else {
-        _playingVoiceMessages.clear();
-        _playingVoiceMessages[messageId] = true;
-        _voiceProgress[messageId] = _voiceProgress[messageId] ?? 0.0;
-        final speed = _voicePlaybackSpeed[messageId] ?? 1.0;
+      });
+      return;
+    }
 
-        _playbackTimer?.cancel();
-        _playbackTimer = Timer.periodic(const Duration(milliseconds: 100), (t) {
-          if (!mounted) return;
-          setState(() {
-            double current = _voiceProgress[messageId] ?? 0.0;
-            final effectiveSecs = totalSeconds > 0 ? totalSeconds : 10;
-            current += (0.1 * speed / effectiveSecs);
-            if (current >= 1.0) {
-              _voiceProgress[messageId] = 0.0;
-              _playingVoiceMessages[messageId] = false;
-              _playbackTimer?.cancel();
-            } else {
-              _voiceProgress[messageId] = current;
-            }
-          });
-        });
-      }
+    // Stop any other active voice note playback
+    _audioPlayer.stop();
+    setState(() {
+      _playingVoiceMessages.clear();
+      _playingVoiceMessages[messageId] = true;
     });
+
+    final currentProgress = _voiceProgress[messageId] ?? 0.0;
+    final speed = _voicePlaybackSpeed[messageId] ?? 1.0;
+    final wavBytes = WavAudioEngine.generateWavVoiceNote(
+      durationSeconds: totalSeconds > 0 ? totalSeconds : 10,
+    );
+
+    _audioPlayer.playBytes(
+      wavBytes,
+      speed: speed,
+      startProgress: currentProgress,
+      onProgress: (progress) {
+        if (mounted) {
+          setState(() {
+            _voiceProgress[messageId] = progress;
+          });
+        }
+      },
+      onComplete: () {
+        if (mounted) {
+          setState(() {
+            _playingVoiceMessages[messageId] = false;
+            _voiceProgress[messageId] = 0.0;
+          });
+        }
+      },
+    );
   }
 
   void _cyclePlaybackSpeed(int messageId) {
     setState(() {
       final current = _voicePlaybackSpeed[messageId] ?? 1.0;
+      double newSpeed = 1.0;
       if (current == 1.0) {
-        _voicePlaybackSpeed[messageId] = 1.5;
+        newSpeed = 1.5;
       } else if (current == 1.5) {
-        _voicePlaybackSpeed[messageId] = 2.0;
+        newSpeed = 2.0;
       } else {
-        _voicePlaybackSpeed[messageId] = 1.0;
+        newSpeed = 1.0;
+      }
+      _voicePlaybackSpeed[messageId] = newSpeed;
+      if (_playingVoiceMessages[messageId] == true) {
+        _audioPlayer.setPlaybackRate(newSpeed);
       }
     });
+  }
+
+  void _seekVoicePlayback(int messageId, double progress) {
+    setState(() {
+      _voiceProgress[messageId] = progress;
+    });
+    if (_playingVoiceMessages[messageId] == true) {
+      _audioPlayer.seekTo(progress);
+    }
   }
 
   @override
@@ -504,10 +573,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                     child: Text('Review Note ($durationStr)', style: const TextStyle(color: AppTheme.primaryRose, fontWeight: FontWeight.bold, fontSize: 13)),
                   ),
                   const Spacer(),
-                  // Play/Pause preview
+                  // Play/Pause preview with real audio playback
                   IconButton(
-                    icon: Icon(_isRecordingPaused ? Icons.play_arrow_rounded : Icons.pause_rounded, color: Colors.white, size: 28),
-                    onPressed: _togglePauseRecording,
+                    icon: Icon(_isPreviewPlaying ? Icons.stop_rounded : Icons.play_arrow_rounded, color: AppTheme.primaryRose, size: 28),
+                    tooltip: _isPreviewPlaying ? 'Stop preview' : 'Listen to preview',
+                    onPressed: _togglePreviewPlayback,
                   ),
                   const SizedBox(width: 8),
                   ElevatedButton.icon(
@@ -572,7 +642,14 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 4),
+
+                  // Lock Recording Toggle
+                  IconButton(
+                    icon: Icon(_isRecordingLocked ? Icons.lock_rounded : Icons.lock_open_rounded, color: _isRecordingLocked ? AppTheme.primaryRose : Colors.white54, size: 20),
+                    tooltip: _isRecordingLocked ? 'Recording locked' : 'Lock recording',
+                    onPressed: () => setState(() => _isRecordingLocked = !_isRecordingLocked),
+                  ),
 
                   // Pause / Resume
                   IconButton(
@@ -843,11 +920,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                     ),
                     child: Slider(
                       value: progress.clamp(0.0, 1.0),
-                      onChanged: (val) {
-                        setState(() {
-                          _voiceProgress[msg.id] = val;
-                        });
-                      },
+                      onChanged: (val) => _seekVoicePlayback(msg.id, val),
                     ),
                   ),
                 ],
@@ -874,7 +947,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text('🎙️ $durationStr', style: const TextStyle(color: Colors.white70, fontSize: 11)),
-            const Text('M4A Encrypted', style: TextStyle(color: Colors.white38, fontSize: 10)),
+            const Text('WAV / PCM Encrypted', style: TextStyle(color: Colors.white38, fontSize: 10)),
           ],
         ),
       ],

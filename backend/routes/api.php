@@ -30,6 +30,9 @@ Route::prefix('v1')->group(function () {
         ]);
     });
 
+    // Public Audio Streaming Route (Cross-Origin & Byte-Range enabled)
+    Route::get('/chat/audio/{filename}', [ChatController::class, 'streamAudio']);
+
     // Public Authentication Endpoints
     Route::post('/auth/register', [AuthController::class, 'register']);
     Route::post('/auth/login', [AuthController::class, 'login']);

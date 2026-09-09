@@ -227,4 +227,44 @@ class ChatController extends Controller
             ]
         ]);
     }
+
+    /**
+     * Stream voice note or audio file with Byte-Range & MIME headers
+     */
+    public function streamAudio(string $filename)
+    {
+        $filename = basename($filename);
+        $path = "voices/{$filename}";
+
+        if (!Storage::disk('public')->exists($path)) {
+            if (Storage::disk('public')->exists($filename)) {
+                $path = $filename;
+            } else {
+                return response()->json(['status' => 'error', 'message' => 'Audio file not found'], 404);
+            }
+        }
+
+        $fullPath = Storage::disk('public')->path($path);
+        $fileSize = filesize($fullPath);
+        $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+        $mimeType = match ($ext) {
+            'wav' => 'audio/wav',
+            'mp3' => 'audio/mpeg',
+            'm4a' => 'audio/mp4',
+            'aac' => 'audio/aac',
+            'ogg' => 'audio/ogg',
+            'opus' => 'audio/opus',
+            default => 'audio/wav',
+        };
+
+        return response()->file($fullPath, [
+            'Content-Type' => $mimeType,
+            'Content-Length' => $fileSize,
+            'Accept-Ranges' => 'bytes',
+            'Cache-Control' => 'public, max-age=86400',
+            'Access-Control-Allow-Origin' => '*',
+            'Access-Control-Allow-Methods' => 'GET, HEAD, OPTIONS',
+            'Access-Control-Allow-Headers' => 'Range, Origin, Content-Type, Accept',
+        ]);
+    }
 }
