@@ -24,10 +24,12 @@ php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 
-# Run database migrations safely
+# Run database migrations and seeders safely
 if [ "${RUN_MIGRATIONS:-true}" = "true" ]; then
     echo "==> Executing database migrations (--force)..."
     php artisan migrate --force || echo "==> Note: Migrations skipped or database connecting..."
+    echo "==> Seeding database demo accounts (Saam, Boqran, Alex, Sophia)..."
+    php artisan db:seed --force || echo "==> Note: Seeding skipped..."
 fi
 
 echo "==> Launching PHP-FPM daemon..."

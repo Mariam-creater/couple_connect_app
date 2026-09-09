@@ -21,6 +21,10 @@ class CoupleConnectSeeder extends Seeder
 {
     public function run(): void
     {
+        if (User::where('username', 'saam')->exists() || User::where('username', 'alex')->exists()) {
+            return;
+        }
+
         // 1. Admin User
         $admin = User::create([
             'name' => 'System Administrator',
