@@ -384,6 +384,75 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  Future<Map<String, dynamic>?> uploadAttachment({
+    required List<int> fileBytes,
+    required String filename,
+    String? type,
+  }) async {
+    final res = await ApiClient.uploadMultipart(
+      '${ApiConstants.baseUrl}/chat/upload',
+      fileBytes: fileBytes,
+      filename: filename,
+      fields: {
+        if (type != null) 'type': type,
+      },
+    );
+    if (res.isSuccess && res.data != null) {
+      return Map<String, dynamic>.from(res.data['data'] ?? res.data);
+    }
+    return null;
+  }
+
+  Future<void> sendMediaMessage({
+    required String type,
+    required String filename,
+    required List<int> fileBytes,
+    String? caption,
+    Map<String, dynamic>? extraMetadata,
+  }) async {
+    // 1. Upload to storage
+    final uploadData = await uploadAttachment(
+      fileBytes: fileBytes,
+      filename: filename,
+      type: type,
+    );
+
+    final filePath = uploadData?['file_path'] ?? '';
+    final mimeType = uploadData?['mime_type'] ?? '';
+    final sizeBytes = uploadData?['file_size_bytes'] ?? fileBytes.length;
+
+    // 2. Encrypt caption or payload
+    final plainText = caption ?? filename;
+    final payload = E2EEEngine.encryptText(
+      plainText: plainText,
+      sharedSecret: sharedSecret,
+    );
+
+    final metadata = {
+      'file_path': filePath,
+      'file_name': filename,
+      'mime_type': mimeType,
+      'file_size_bytes': sizeBytes,
+      'file_size': '${(sizeBytes / (1024 * 1024)).toStringAsFixed(1)} MB',
+      if (extraMetadata != null) ...extraMetadata,
+    };
+
+    final res = await ApiClient.post(ApiConstants.chatMessages, {
+      'type': type,
+      'encrypted_payload': payload.ciphertext,
+      'iv': payload.iv,
+      'mac': payload.mac,
+      'metadata': metadata,
+    });
+
+    if (res.isSuccess && res.data != null) {
+      final model = MessageModel.fromJson(res.data);
+      model.decryptedText = plainText;
+      messages.insert(0, model);
+      notifyListeners();
+    }
+  }
+
   Future<void> sendTextMessage(String plainText, {String type = 'text', Map<String, dynamic>? metadata}) async {
     final payload = E2EEEngine.encryptText(
       plainText: plainText,

@@ -192,20 +192,36 @@ class ChatController extends Controller
     public function uploadAttachment(Request $request): JsonResponse
     {
         $request->validate([
-            'file' => 'required|file|max:51200', // max 50MB
+            'file' => 'required|file|max:102400', // max 100MB
             'encryption_hash' => 'nullable|string',
+            'type' => 'nullable|in:voice,document,image,video,photo,pdf',
         ]);
 
         $file = $request->file('file');
-        $filename = Str::uuid() . '.' . $file->getClientOriginalExtension();
-        $path = $file->storeAs('attachments', $filename, 'public');
+        $ext = strtolower($file->getClientOriginalExtension());
+        $mime = $file->getClientMimeType();
+
+        // Determine destination folder
+        $folder = 'documents';
+        if (str_starts_with($mime, 'audio/') || in_array($ext, ['m4a', 'aac', 'mp3', 'ogg', 'wav', 'opus'])) {
+            $folder = 'voices';
+        } elseif (str_starts_with($mime, 'image/') || in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'heic', 'gif'])) {
+            $folder = 'images';
+        } elseif (str_starts_with($mime, 'video/') || in_array($ext, ['mp4', 'mov', 'avi', 'mkv', 'webm'])) {
+            $folder = 'videos';
+        }
+
+        $filename = Str::uuid() . '.' . $ext;
+        $path = $file->storeAs($folder, $filename, 'public');
 
         return response()->json([
             'status' => 'success',
             'data' => [
                 'file_path' => Storage::url($path),
+                'storage_path' => $path,
+                'folder' => $folder,
                 'file_name' => $file->getClientOriginalName(),
-                'mime_type' => $file->getClientMimeType(),
+                'mime_type' => $mime,
                 'file_size_bytes' => $file->getSize(),
                 'encryption_hash' => $request->input('encryption_hash'),
             ]

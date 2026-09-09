@@ -77,6 +77,39 @@ class ApiClient {
     }
   }
 
+  static Future<ApiResponse<dynamic>> uploadMultipart(
+    String url, {
+    required List<int> fileBytes,
+    required String filename,
+    String fieldName = 'file',
+    Map<String, String>? fields,
+  }) async {
+    try {
+      final request = http.MultipartRequest('POST', Uri.parse(url));
+      request.headers.addAll({
+        'Accept': 'application/json',
+        if (_authToken != null) 'Authorization': 'Bearer $_authToken',
+      });
+
+      if (fields != null) {
+        request.fields.addAll(fields);
+      }
+
+      final multipartFile = http.MultipartFile.fromBytes(
+        fieldName,
+        fileBytes,
+        filename: filename,
+      );
+      request.files.add(multipartFile);
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+      return _parseResponse(response);
+    } catch (e) {
+      return ApiResponse(isSuccess: false, message: e.toString(), statusCode: 500);
+    }
+  }
+
   static Future<ApiResponse<dynamic>> delete(String url, {Map<String, dynamic>? data}) async {
     try {
       final res = await http.delete(

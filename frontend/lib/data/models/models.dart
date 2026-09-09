@@ -159,6 +159,26 @@ class CoupleSpaceModel {
   }
 }
 
+class MessageReactionModel {
+  final int id;
+  final int userId;
+  final String reaction;
+
+  MessageReactionModel({
+    required this.id,
+    required this.userId,
+    required this.reaction,
+  });
+
+  factory MessageReactionModel.fromJson(Map<String, dynamic> json) {
+    return MessageReactionModel(
+      id: json['id'] ?? 0,
+      userId: json['user_id'] ?? 0,
+      reaction: json['reaction'] ?? '❤️',
+    );
+  }
+}
+
 class MessageModel {
   final int id;
   final String messageUuid;
@@ -168,9 +188,11 @@ class MessageModel {
   final String iv;
   final String? mac;
   final bool isPinned;
+  final bool isEdited;
   final String status;
   final DateTime createdAt;
   final Map<String, dynamic>? metadata;
+  final List<MessageReactionModel> reactions;
   String? decryptedText;
 
   MessageModel({
@@ -182,13 +204,16 @@ class MessageModel {
     required this.iv,
     this.mac,
     this.isPinned = false,
+    this.isEdited = false,
     this.status = 'sent',
     required this.createdAt,
     this.metadata,
+    this.reactions = const [],
     this.decryptedText,
   });
 
   factory MessageModel.fromJson(Map<String, dynamic> json) {
+    final rawReactions = (json['reactions'] as List? ?? []);
     return MessageModel(
       id: json['id'] ?? 0,
       messageUuid: json['message_uuid'] ?? '',
@@ -198,9 +223,11 @@ class MessageModel {
       iv: json['iv'] ?? '',
       mac: json['mac'],
       isPinned: json['is_pinned'] ?? false,
+      isEdited: json['is_edited'] ?? false,
       status: json['status'] ?? 'sent',
       createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
       metadata: json['metadata'],
+      reactions: rawReactions.map((r) => MessageReactionModel.fromJson(r)).toList(),
     );
   }
 }
