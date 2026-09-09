@@ -213,7 +213,10 @@ class CalendarEventModel {
   final String colorHex;
   final DateTime startTime;
   final DateTime? endTime;
+  final bool isAllDay;
   final bool isCountdown;
+  final String recurrence;
+  final int reminderMinutesBefore;
   final String? location;
 
   CalendarEventModel({
@@ -224,7 +227,10 @@ class CalendarEventModel {
     required this.colorHex,
     required this.startTime,
     this.endTime,
+    this.isAllDay = false,
     this.isCountdown = false,
+    this.recurrence = 'none',
+    this.reminderMinutesBefore = 60,
     this.location,
   });
 
@@ -237,7 +243,10 @@ class CalendarEventModel {
       colorHex: json['color_hex'] ?? '#E91E63',
       startTime: DateTime.tryParse(json['start_time'] ?? '') ?? DateTime.now(),
       endTime: json['end_time'] != null ? DateTime.tryParse(json['end_time']) : null,
+      isAllDay: json['is_all_day'] ?? false,
       isCountdown: json['is_countdown'] ?? false,
+      recurrence: json['recurrence'] ?? 'none',
+      reminderMinutesBefore: json['reminder_minutes_before'] ?? 60,
       location: json['location'],
     );
   }
@@ -245,37 +254,49 @@ class CalendarEventModel {
 
 class MemoryModel {
   final int id;
+  final String uuid;
   final String title;
   final String category;
   final String albumName;
   final String? mediaPath;
+  final String? thumbnailPath;
   final String? encryptedBody;
+  final int? fileSizeBytes;
   final DateTime memoryDate;
   final bool isFavorite;
+  final bool isArchived;
   final String? locationName;
 
   MemoryModel({
     required this.id,
+    this.uuid = '',
     required this.title,
     required this.category,
     required this.albumName,
     this.mediaPath,
+    this.thumbnailPath,
     this.encryptedBody,
+    this.fileSizeBytes,
     required this.memoryDate,
     this.isFavorite = false,
+    this.isArchived = false,
     this.locationName,
   });
 
   factory MemoryModel.fromJson(Map<String, dynamic> json) {
     return MemoryModel(
       id: json['id'] ?? 0,
+      uuid: json['uuid'] ?? '',
       title: json['title'] ?? '',
       category: json['category'] ?? 'photo',
-      albumName: json['album_name'] ?? 'Main',
+      albumName: json['album_name'] ?? 'Main Memories',
       mediaPath: json['media_path'],
+      thumbnailPath: json['thumbnail_path'],
       encryptedBody: json['encrypted_body'],
+      fileSizeBytes: json['file_size_bytes'],
       memoryDate: DateTime.tryParse(json['memory_date'] ?? '') ?? DateTime.now(),
       isFavorite: json['is_favorite'] ?? false,
+      isArchived: json['is_archived'] ?? false,
       locationName: json['location_name'],
     );
   }

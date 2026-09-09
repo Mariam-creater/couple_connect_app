@@ -459,7 +459,7 @@ class AppState extends ChangeNotifier {
     await ApiClient.post(ApiConstants.chatRead, {});
   }
 
-  // --- CALENDAR ---
+  // --- CALENDAR (PHASE 2) ---
   Future<void> fetchCalendarEvents() async {
     final res = await ApiClient.get(ApiConstants.calendarEvents);
     if (res.isSuccess && res.data != null) {
@@ -469,13 +469,31 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<bool> addCalendarEvent(String title, String category, DateTime startTime, {bool isCountdown = false, String? location}) async {
+  Future<bool> addCalendarEvent({
+    required String title,
+    required String category,
+    required DateTime startTime,
+    DateTime? endTime,
+    String? description,
+    String? colorHex,
+    bool isAllDay = false,
+    bool isCountdown = false,
+    String recurrence = 'none',
+    int reminderMinutesBefore = 60,
+    String? location,
+  }) async {
     final res = await ApiClient.post(ApiConstants.calendarEvents, {
       'title': title,
       'category': category,
       'start_time': startTime.toIso8601String(),
+      if (endTime != null) 'end_time': endTime.toIso8601String(),
+      if (description != null) 'description': description,
+      if (colorHex != null) 'color_hex': colorHex,
+      'is_all_day': isAllDay,
       'is_countdown': isCountdown,
-      'location': location,
+      'recurrence': recurrence,
+      'reminder_minutes_before': reminderMinutesBefore,
+      if (location != null) 'location': location,
     });
     if (res.isSuccess) {
       await fetchCalendarEvents();
@@ -484,14 +502,121 @@ class AppState extends ChangeNotifier {
     return false;
   }
 
-  // --- MEMORIES ---
-  Future<void> fetchMemories() async {
-    final res = await ApiClient.get(ApiConstants.memories);
+  Future<bool> updateCalendarEvent(int eventId, {
+    String? title,
+    String? category,
+    DateTime? startTime,
+    DateTime? endTime,
+    String? description,
+    String? colorHex,
+    bool? isAllDay,
+    bool? isCountdown,
+    String? recurrence,
+    int? reminderMinutesBefore,
+    String? location,
+  }) async {
+    final res = await ApiClient.put('${ApiConstants.calendarEvents}/$eventId', {
+      if (title != null) 'title': title,
+      if (category != null) 'category': category,
+      if (startTime != null) 'start_time': startTime.toIso8601String(),
+      if (endTime != null) 'end_time': endTime.toIso8601String(),
+      if (description != null) 'description': description,
+      if (colorHex != null) 'color_hex': colorHex,
+      if (isAllDay != null) 'is_all_day': isAllDay,
+      if (isCountdown != null) 'is_countdown': isCountdown,
+      if (recurrence != null) 'recurrence': recurrence,
+      if (reminderMinutesBefore != null) 'reminder_minutes_before': reminderMinutesBefore,
+      if (location != null) 'location': location,
+    });
+    if (res.isSuccess) {
+      await fetchCalendarEvents();
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> deleteCalendarEvent(int eventId) async {
+    final res = await ApiClient.delete('${ApiConstants.calendarEvents}/$eventId');
+    if (res.isSuccess) {
+      calendarEvents.removeWhere((e) => e.id == eventId);
+      notifyListeners();
+      return true;
+    }
+    return false;
+  }
+
+  // --- MEMORIES & SHARED STORAGE (PHASE 2) ---
+  Future<void> fetchMemories({String? category, String? albumName, bool? favoritesOnly, bool? archived}) async {
+    String query = '';
+    List<String> params = [];
+    if (category != null && category != 'all') params.add('category=$category');
+    if (albumName != null && albumName != 'All') params.add('album_name=$albumName');
+    if (favoritesOnly == true) params.add('favorites_only=1');
+    if (archived == true) params.add('archived=1');
+
+    if (params.isNotEmpty) query = '?${params.join('&')}';
+
+    final res = await ApiClient.get('${ApiConstants.memories}$query');
     if (res.isSuccess && res.data != null) {
       final list = (res.data['data'] ?? res.data) as List;
       memories = list.map((m) => MemoryModel.fromJson(m)).toList();
       notifyListeners();
     }
+  }
+
+  Future<bool> addMemory({
+    required String title,
+    required String category,
+    String? albumName,
+    String? encryptedBody,
+    String? mediaPath,
+    required DateTime memoryDate,
+    String? locationName,
+    bool isFavorite = false,
+  }) async {
+    final res = await ApiClient.post(ApiConstants.memories, {
+      'title': title,
+      'category': category,
+      'album_name': albumName ?? 'Main Memories',
+      if (encryptedBody != null) 'encrypted_body': encryptedBody,
+      if (mediaPath != null) 'media_path': mediaPath,
+      'memory_date': memoryDate.toIso8601String().substring(0, 10),
+      if (locationName != null) 'location_name': locationName,
+      'is_favorite': isFavorite,
+    });
+    if (res.isSuccess) {
+      await fetchMemories();
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> toggleMemoryFavorite(int memoryId) async {
+    final res = await ApiClient.post('${ApiConstants.memories}/$memoryId/favorite', {});
+    if (res.isSuccess) {
+      await fetchMemories();
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> toggleMemoryArchive(int memoryId) async {
+    final res = await ApiClient.post('${ApiConstants.memories}/$memoryId/archive', {});
+    if (res.isSuccess) {
+      await fetchMemories();
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> deleteMemory(int memoryId) async {
+    final res = await ApiClient.delete('${ApiConstants.memories}/$memoryId');
+    if (res.isSuccess) {
+      memories.removeWhere((m) => m.id == memoryId);
+      notifyListeners();
+      return true;
+    }
+    return false;
   }
 
   // --- VISION BOARD ---
