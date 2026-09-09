@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\CoupleSpace;
 use App\Models\Message;
+use App\Models\MessageAttachment;
 use App\Services\ChatService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -226,6 +227,200 @@ class ChatController extends Controller
                 'encryption_hash' => $request->input('encryption_hash'),
             ]
         ]);
+    }
+
+    /**
+     * Dedicated Real Document Upload Endpoint
+     * Stores in storage/app/public/chat_documents/{couple_space_id}/
+     */
+    public function uploadDocument(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->couple_space_id) {
+            return response()->json(['status' => 'error', 'message' => 'No active couple space'], 404);
+        }
+
+        $file = $request->file('file') ?? $request->file('document');
+        if (!$file) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'The file or document field is required.',
+                'errors' => ['file' => ['The file or document field is required.']]
+            ], 422);
+        }
+
+        $request->validate([
+            'file' => [
+                'nullable',
+                'file',
+                'max:51200', // max 50MB
+                'mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,txt,zip,rar,7z,csv,rtf,json',
+            ],
+            'document' => [
+                'nullable',
+                'file',
+                'max:51200', // max 50MB
+                'mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,txt,zip,rar,7z,csv,rtf,json',
+            ],
+            'caption' => 'nullable|string|max:500',
+            'encrypted_payload' => 'nullable|string',
+            'iv' => 'nullable|string',
+            'mac' => 'nullable|string',
+        ]);
+        $originalName = $file->getClientOriginalName();
+        $ext = strtolower($file->getClientOriginalExtension());
+        $mime = $file->getClientMimeType() ?: 'application/octet-stream';
+        $sizeBytes = $file->getSize();
+
+        // Computed human-readable size
+        $formattedSize = $this->formatBytes($sizeBytes);
+
+        // Store in couple space document directory
+        $spaceFolder = "chat_documents/{$user->couple_space_id}";
+        $storedFilename = Str::uuid() . '.' . $ext;
+        $path = $file->storeAs($spaceFolder, $storedFilename, 'public');
+
+        $downloadUrl = url("api/v1/chat/documents/{$storedFilename}/download");
+        $fileUrl = Storage::url($path);
+
+        // Create message
+        $caption = $request->input('caption', "📄 [Document: {$originalName}]");
+        $encryptedPayload = $request->input('encrypted_payload') ?: base64_encode($caption);
+        $iv = $request->input('iv') ?: bin2hex(random_bytes(16));
+        $mac = $request->input('mac');
+
+        $message = Message::create([
+            'couple_space_id' => $user->couple_space_id,
+            'sender_id' => $user->id,
+            'type' => 'document',
+            'file_path' => $fileUrl,
+            'original_name' => $originalName,
+            'mime_type' => $mime,
+            'file_size_bytes' => $sizeBytes,
+            'encrypted_payload' => $encryptedPayload,
+            'iv' => $iv,
+            'mac' => $mac,
+            'status' => 'sent',
+            'metadata' => [
+                'original_name' => $originalName,
+                'file_name' => $originalName,
+                'stored_filename' => $storedFilename,
+                'file_size_bytes' => $sizeBytes,
+                'file_size_formatted' => $formattedSize,
+                'mime_type' => $mime,
+                'extension' => $ext,
+                'storage_path' => $path,
+                'download_url' => $downloadUrl,
+                'caption' => $caption,
+            ],
+        ]);
+
+        $attachment = MessageAttachment::create([
+            'message_id' => $message->id,
+            'file_path' => $path,
+            'file_name' => $storedFilename,
+            'original_name' => $originalName,
+            'mime_type' => $mime,
+            'file_size_bytes' => $sizeBytes,
+            'encryption_hash' => $request->input('encryption_hash'),
+        ]);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Document uploaded successfully',
+            'data' => [
+                'id' => $message->id,
+                'type' => 'document',
+                'couple_space_id' => $message->couple_space_id,
+                'sender_id' => $message->sender_id,
+                'original_name' => $originalName,
+                'file_name' => $storedFilename,
+                'file_size_bytes' => $sizeBytes,
+                'file_size_formatted' => $formattedSize,
+                'mime_type' => $mime,
+                'file_path' => $fileUrl,
+                'download_url' => $downloadUrl,
+                'metadata' => $message->metadata,
+                'caption' => $caption,
+                'message' => $message->load(['sender:id,name,avatar_url', 'attachments']),
+                'attachment' => $attachment,
+            ]
+        ], 201);
+    }
+
+    /**
+     * Download or stream document
+     */
+    public function downloadDocument(Request $request, string $identifier)
+    {
+        $attachment = null;
+        $filePath = null;
+        $originalName = null;
+
+        // Try numeric ID first
+        if (is_numeric($identifier)) {
+            $attachment = MessageAttachment::find($identifier);
+            if ($attachment) {
+                $filePath = $attachment->file_path;
+                $originalName = $attachment->original_name ?: $attachment->file_name;
+            } else {
+                $msg = Message::find($identifier);
+                if ($msg && $msg->file_path) {
+                    $originalName = $msg->original_name ?: 'document';
+                    $filePath = str_replace('/storage/', '', $msg->file_path);
+                }
+            }
+        }
+
+        // If not found by ID, search by filename in chat_documents
+        if (!$filePath) {
+            $cleanName = basename($identifier);
+            // Search all subdirectories in chat_documents
+            $files = Storage::disk('public')->allFiles('chat_documents');
+            foreach ($files as $file) {
+                if (basename($file) === $cleanName) {
+                    $filePath = $file;
+                    $originalName = $cleanName;
+                    break;
+                }
+            }
+            // Check root documents
+            if (!$filePath && Storage::disk('public')->exists("documents/{$cleanName}")) {
+                $filePath = "documents/{$cleanName}";
+                $originalName = $cleanName;
+            }
+        }
+
+        if (!$filePath || !Storage::disk('public')->exists($filePath)) {
+            return response()->json(['status' => 'error', 'message' => 'Document not found'], 404);
+        }
+
+        if ($attachment) {
+            $attachment->increment('download_count');
+        }
+
+        $fullPath = Storage::disk('public')->path($filePath);
+        $mimeType = mime_content_type($fullPath) ?: 'application/octet-stream';
+        $downloadName = $originalName ?: basename($filePath);
+
+        return response()->download($fullPath, $downloadName, [
+            'Content-Type' => $mimeType,
+            'Accept-Ranges' => 'bytes',
+            'Access-Control-Allow-Origin' => '*',
+            'Access-Control-Allow-Methods' => 'GET, HEAD, OPTIONS',
+            'Access-Control-Allow-Headers' => 'Range, Origin, Content-Type, Accept',
+            'Access-Control-Expose-Headers' => 'Content-Disposition, Content-Length',
+        ]);
+    }
+
+    private function formatBytes(int $bytes, int $precision = 2): string
+    {
+        $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        $bytes = max($bytes, 0);
+        $pow = floor(($bytes ? log($bytes) : 0) / log(1024));
+        $pow = min($pow, count($units) - 1);
+        $bytes /= pow(1024, $pow);
+        return round($bytes, $precision) . ' ' . $units[$pow];
     }
 
     /**

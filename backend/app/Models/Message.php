@@ -18,6 +18,10 @@ class Message extends Model
         'couple_space_id',
         'sender_id',
         'type',
+        'file_path',
+        'original_name',
+        'mime_type',
+        'file_size_bytes',
         'encrypted_payload',
         'iv',
         'mac',
@@ -40,6 +44,7 @@ class Message extends Model
             'delivered_at' => 'datetime',
             'read_at' => 'datetime',
             'metadata' => 'array',
+            'file_size_bytes' => 'integer',
         ];
     }
 

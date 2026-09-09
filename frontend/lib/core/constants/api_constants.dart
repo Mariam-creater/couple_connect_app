@@ -29,6 +29,7 @@ class ApiConstants {
   static const String chatPinned = '$baseUrl/chat/pinned';
   static const String chatRead = '$baseUrl/chat/messages/read';
   static const String chatUpload = '$baseUrl/chat/upload';
+  static const String chatDocuments = '$baseUrl/chat/documents';
 
   // Calendar
   static const String calendarEvents = '$baseUrl/calendar/events';

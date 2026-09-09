@@ -30,8 +30,10 @@ Route::prefix('v1')->group(function () {
         ]);
     });
 
-    // Public Audio Streaming Route (Cross-Origin & Byte-Range enabled)
+    // Public Audio & Document Streaming Routes (Cross-Origin & Byte-Range enabled)
     Route::get('/chat/audio/{filename}', [ChatController::class, 'streamAudio']);
+    Route::get('/chat/documents/{identifier}/download', [ChatController::class, 'downloadDocument']);
+    Route::get('/chat/documents/{identifier}', [ChatController::class, 'downloadDocument']);
 
     // Public Authentication Endpoints
     Route::post('/auth/register', [AuthController::class, 'register']);
@@ -64,7 +66,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/couple/space', [CoupleController::class, 'space']);
         Route::put('/couple/space', [CoupleController::class, 'updateSpace']);
 
-        // Feature 2: Real-Time Chat & E2EE Messages
+        // Feature 2: Real-Time Chat & E2EE Messages & Documents
         Route::get('/chat/messages', [ChatController::class, 'index']);
         Route::post('/chat/messages', [ChatController::class, 'store']);
         Route::put('/chat/messages/{id}', [ChatController::class, 'edit']);
@@ -74,6 +76,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/chat/pinned', [ChatController::class, 'pinned']);
         Route::delete('/chat/messages/{id}', [ChatController::class, 'destroy']);
         Route::post('/chat/upload', [ChatController::class, 'uploadAttachment']);
+        Route::post('/chat/documents', [ChatController::class, 'uploadDocument']);
 
         // Feature 3: Love Calendar
         Route::get('/calendar/events', [CalendarController::class, 'index']);

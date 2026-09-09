@@ -14,9 +14,11 @@ class MessageAttachment extends Model
         'message_id',
         'file_path',
         'file_name',
+        'original_name',
         'mime_type',
         'file_size_bytes',
         'encryption_hash',
+        'download_count',
     ];
 
     public function message(): BelongsTo

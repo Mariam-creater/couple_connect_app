@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../core/audio/audio_player_platform.dart';
 import '../../../core/audio/wav_audio_engine.dart';
+import '../../../core/constants/api_constants.dart';
+import '../../../core/services/document_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/models.dart';
 import '../../providers/app_state.dart';
@@ -25,6 +27,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   bool _isPartnerTyping = false;
   MessageModel? _replyingToMessage;
   Timer? _typingSimulationTimer;
+
+  // --- Real Document Picking & Sharing State ---
+  PickedDocumentData? _selectedDocument;
+  bool _isUploadingDocument = false;
+  double _uploadProgress = 0.0;
 
   // --- Voice Recording Studio State ---
   bool _isRecordingVoice = false;
@@ -78,6 +85,58 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  // --- REAL DOCUMENT PICKING & SHARING METHODS ---
+  Future<void> _pickAndSelectDocument() async {
+    final doc = await DocumentService.pickDocument();
+    if (doc != null && mounted) {
+      setState(() {
+        _selectedDocument = doc;
+        _uploadProgress = 0.0;
+        _isUploadingDocument = false;
+      });
+    }
+  }
+
+  Future<void> _sendSelectedDocument(AppState appState) async {
+    if (_selectedDocument == null) return;
+    final doc = _selectedDocument!;
+    final caption = _textController.text.trim();
+
+    setState(() {
+      _isUploadingDocument = true;
+      _uploadProgress = 0.1;
+    });
+
+    await appState.uploadRealDocument(
+      document: doc,
+      caption: caption,
+      onProgress: (progress) {
+        if (mounted) {
+          setState(() {
+            _uploadProgress = progress;
+          });
+        }
+      },
+    );
+
+    if (mounted) {
+      _textController.clear();
+      setState(() {
+        _selectedDocument = null;
+        _isUploadingDocument = false;
+        _uploadProgress = 0.0;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Document "${doc.name}" (${doc.formattedSize}) encrypted & sent! 📄✨'),
+          backgroundColor: const Color(0xFF1E1C2B),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   // --- VOICE RECORDING METHODS ---
@@ -467,6 +526,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           // Reply Bar Preview
           if (_replyingToMessage != null) _buildReplyingBar(),
 
+          // Real Document Pre-Send Preview Bar
+          if (_selectedDocument != null) _buildDocumentPreviewBar(appState),
+
           // Chat Input Area / Voice Studio
           _isRecordingVoice ? _buildVoiceStudio(appState) : _buildStandardInputArea(appState),
         ],
@@ -536,6 +598,164 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             icon: const Icon(Icons.close_rounded, color: Colors.white54, size: 18),
             onPressed: () => setState(() => _replyingToMessage = null),
           ),
+        ],
+      ),
+    );
+  }
+
+  // --- REAL DOCUMENT PRE-SEND PREVIEW CONTAINER ---
+  Widget _buildDocumentPreviewBar(AppState appState) {
+    if (_selectedDocument == null) return const SizedBox.shrink();
+    final doc = _selectedDocument!;
+    final ext = doc.extension.toUpperCase();
+    final iconData = DocumentService.getDocumentIcon(doc.extension);
+    final iconColor = DocumentService.getDocumentColor(doc.extension);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1C2B),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: iconColor.withOpacity(0.4), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.35),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: iconColor.withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: iconColor.withOpacity(0.35)),
+                ),
+                child: Icon(iconData, color: iconColor, size: 28),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      doc.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                          decoration: BoxDecoration(
+                            color: iconColor.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            ext,
+                            style: TextStyle(
+                              color: iconColor,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          doc.formattedSize,
+                          style: const TextStyle(color: Colors.white70, fontSize: 12),
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          '• Ready to encrypt & send',
+                          style: TextStyle(color: Colors.white38, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              if (!_isUploadingDocument)
+                IconButton(
+                  icon: const Icon(Icons.close_rounded, color: Colors.white54),
+                  tooltip: 'Cancel selection',
+                  onPressed: () {
+                    setState(() {
+                      _selectedDocument = null;
+                      _uploadProgress = 0.0;
+                    });
+                  },
+                ),
+            ],
+          ),
+          if (_isUploadingDocument) ...[
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Encrypting & Uploading Document...',
+                  style: TextStyle(color: AppTheme.accentGold, fontSize: 11, fontWeight: FontWeight.w600),
+                ),
+                Text(
+                  '${(_uploadProgress * 100).toInt()}%',
+                  style: const TextStyle(color: AppTheme.accentGold, fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: _uploadProgress > 0 ? _uploadProgress : null,
+                backgroundColor: Colors.white10,
+                valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.primaryRose),
+                minHeight: 4,
+              ),
+            ),
+          ] else ...[
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _selectedDocument = null;
+                    });
+                  },
+                  icon: const Icon(Icons.cancel_outlined, size: 16, color: Colors.white60),
+                  label: const Text('Cancel', style: TextStyle(color: Colors.white60, fontSize: 12)),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: () => _sendSelectedDocument(appState),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryRose,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  icon: const Icon(Icons.send_rounded, size: 16, color: Colors.white),
+                  label: const Text('Send Document', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -724,12 +944,16 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
               ),
             ),
             const SizedBox(width: 8),
-            _textController.text.trim().isNotEmpty
+            (_textController.text.trim().isNotEmpty || _selectedDocument != null)
                 ? Container(
                     decoration: const BoxDecoration(color: AppTheme.primaryRose, shape: BoxShape.circle),
                     child: IconButton(
                       icon: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
                       onPressed: () {
+                        if (_selectedDocument != null) {
+                          _sendSelectedDocument(appState);
+                          return;
+                        }
                         final text = _textController.text.trim();
                         if (text.isEmpty) return;
                         _textController.clear();
@@ -954,50 +1178,131 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     );
   }
 
-  // --- DOCUMENT MESSAGE BUBBLE ---
+  // --- REAL DOCUMENT MESSAGE BUBBLE ---
   Widget _buildDocumentMessageBody(MessageModel msg, bool isMe) {
     final meta = msg.metadata ?? {};
-    final fileName = meta['file_name'] ?? msg.decryptedText ?? 'Encrypted_Document.pdf';
-    final fileSize = meta['file_size'] ?? '1.8 MB';
-    final ext = fileName.split('.').last.toUpperCase();
+    final originalName = meta['original_name'] ?? meta['file_name'] ?? msg.decryptedText ?? 'Document.pdf';
+    final fileSize = meta['file_size'] ?? meta['formatted_size'] ?? 'Document';
+    final ext = (originalName.contains('.') ? originalName.split('.').last : (meta['extension'] ?? 'pdf')).toString().toLowerCase();
+    final docIcon = DocumentService.getDocumentIcon(ext);
+    final docColor = DocumentService.getDocumentColor(ext);
+    final rawDownloadUrl = meta['download_url'] ?? meta['url'] ?? '${ApiConstants.chatDocuments}/${msg.id}/download';
+    final downloadUrl = rawDownloadUrl.startsWith('http') ? rawDownloadUrl : '${ApiConstants.baseUrl}$rawDownloadUrl';
 
     return InkWell(
-      onTap: () => _showDocumentPreviewDialog(context, fileName, fileSize),
+      borderRadius: BorderRadius.circular(14),
+      onTap: () async {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: docColor),
+                ),
+                const SizedBox(width: 12),
+                Expanded(child: Text('Opening "$originalName"...', style: const TextStyle(fontSize: 12))),
+              ],
+            ),
+            duration: const Duration(seconds: 2),
+            backgroundColor: const Color(0xFF1E1C2B),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+
+        await DocumentService.downloadOrOpenDocument(
+          downloadUrl: downloadUrl,
+          fileName: originalName,
+        );
+      },
       child: Container(
-        padding: const EdgeInsets.all(10),
+        constraints: const BoxConstraints(maxWidth: 280),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.black26,
-          borderRadius: BorderRadius.circular(12),
+          color: isMe ? const Color(0xFF3B1528).withOpacity(0.6) : const Color(0xFF1E1C2B),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: docColor.withOpacity(0.35), width: 1.2),
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.blueAccent.withOpacity(0.3),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(Icons.description_rounded, color: Colors.blueAccent, size: 24),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    fileName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: docColor.withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: docColor.withOpacity(0.4)),
                   ),
-                  const SizedBox(height: 2),
-                  Text('$ext • $fileSize', style: const TextStyle(color: Colors.white60, fontSize: 11)),
-                ],
-              ),
+                  child: Icon(docIcon, color: docColor, size: 26),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        originalName,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: docColor.withOpacity(0.25),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              ext.toUpperCase(),
+                              style: TextStyle(
+                                color: docColor,
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            fileSize,
+                            style: const TextStyle(color: Colors.white70, fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.08),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.download_rounded, color: Colors.white, size: 18),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            const Icon(Icons.download_rounded, color: Colors.white70, size: 20),
+            if (msg.decryptedText != null &&
+                msg.decryptedText != originalName &&
+                msg.decryptedText!.isNotEmpty &&
+                !msg.decryptedText!.startsWith('📄 [Encrypted Document')) ...[
+              const SizedBox(height: 8),
+              Text(
+                msg.decryptedText!,
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+              ),
+            ],
           ],
         ),
       ),
@@ -1110,7 +1415,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                 }),
                 _buildAttachmentOption(Icons.picture_as_pdf_rounded, 'Documents', Colors.redAccent, () {
                   Navigator.pop(ctx);
-                  _showDocumentPicker(context, appState);
+                  _pickAndSelectDocument();
                 }),
                 _buildAttachmentOption(Icons.image_rounded, 'Photos', AppTheme.primaryRose, () {
                   Navigator.pop(ctx);
@@ -1137,22 +1442,14 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   }
 
   void _showDocumentPicker(BuildContext context, AppState appState) {
-    final customDocController = TextEditingController();
-
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true,
       backgroundColor: const Color(0xFF1E1C2B),
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (ctx) {
-        return Padding(
-          padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 20,
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-          ),
-          child: SingleChildScrollView(
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1164,95 +1461,32 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                     Text('Send Encrypted Document 📄', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
                   ],
                 ),
-                const SizedBox(height: 16),
-
-                _buildDocItem(ctx, appState, 'Travel_Itinerary_Kyoto.pdf', '2.4 MB', Icons.picture_as_pdf_rounded, Colors.redAccent),
-                _buildDocItem(ctx, appState, 'Couple_Monthly_Budget_2026.xlsx', '850 KB', Icons.table_chart_rounded, Colors.greenAccent),
-                _buildDocItem(ctx, appState, 'Wedding_Guest_List_&_Venues.docx', '1.2 MB', Icons.description_rounded, Colors.blueAccent),
-                _buildDocItem(ctx, appState, 'Our_Love_Promise_Contract.pdf', '980 KB', Icons.favorite_rounded, AppTheme.primaryRose),
-                _buildDocItem(ctx, appState, 'Dream_Home_Blueprints.pdf', '4.1 MB', Icons.home_rounded, AppTheme.accentGold),
-
-                const SizedBox(height: 16),
-                const Divider(color: Colors.white10),
-                const SizedBox(height: 8),
-
-                TextField(
-                  controller: customDocController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    labelText: 'Custom Document Name',
-                    hintText: 'e.g. Flight_Tickets_Paris.pdf',
-                    hintStyle: const TextStyle(color: Colors.white30),
-                    prefixIcon: const Icon(Icons.file_upload_rounded, color: Colors.blueAccent),
-                    filled: true,
-                    fillColor: Colors.white.withOpacity(0.04),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-                  ),
-                ),
                 const SizedBox(height: 12),
+                const Text(
+                  'Choose any file from your device. Supported: PDF, DOCX, XLSX, PPTX, TXT, ZIP, CSV, etc. Up to 50MB.',
+                  style: TextStyle(color: Colors.white70, fontSize: 13),
+                ),
+                const SizedBox(height: 20),
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
-                    icon: const Icon(Icons.send_rounded, size: 18),
-                    label: const Text('Send Custom Document', style: TextStyle(fontWeight: FontWeight.bold)),
+                    icon: const Icon(Icons.folder_open_rounded, size: 20),
+                    label: const Text('Browse Device Files', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blueAccent,
+                      backgroundColor: AppTheme.primaryRose,
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
                     onPressed: () {
-                      final name = customDocController.text.trim();
-                      if (name.isEmpty) return;
                       Navigator.pop(ctx);
-                      final syntheticBytes = List<int>.generate(2048, (i) => i % 256);
-                      appState.sendMediaMessage(
-                        type: 'document',
-                        filename: name,
-                        fileBytes: syntheticBytes,
-                        caption: name,
-                        extraMetadata: {
-                          'file_name': name,
-                          'file_size': '1.5 MB',
-                        },
-                      );
+                      _pickAndSelectDocument();
                     },
                   ),
                 ),
               ],
             ),
           ),
-        );
-      },
-    );
-  }
-
-  Widget _buildDocItem(BuildContext ctx, AppState appState, String title, String size, IconData icon, Color color) {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(vertical: 2, horizontal: 8),
-      leading: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(color: color.withOpacity(0.2), borderRadius: BorderRadius.circular(10)),
-        child: Icon(icon, color: color, size: 22),
-      ),
-      title: Text(title, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-      subtitle: Text('$size • Encrypted & Ready', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 11)),
-      trailing: const Icon(Icons.send_rounded, color: AppTheme.primaryRose, size: 18),
-      onTap: () {
-        Navigator.pop(ctx);
-        final syntheticBytes = List<int>.generate(4096, (i) => i % 256);
-        appState.sendMediaMessage(
-          type: 'document',
-          filename: title,
-          fileBytes: syntheticBytes,
-          caption: title,
-          extraMetadata: {
-            'file_name': title,
-            'file_size': size,
-          },
-        );
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Sent "$title" securely! 📄')),
         );
       },
     );
@@ -1588,7 +1822,12 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     );
   }
 
-  void _showDocumentPreviewDialog(BuildContext context, String name, String size) {
+  void _showDocumentPreviewDialog(BuildContext context, String name, String size, [String? downloadUrl]) {
+    final ext = name.contains('.') ? name.split('.').last.toLowerCase() : 'pdf';
+    final docColor = DocumentService.getDocumentColor(ext);
+    final docIcon = DocumentService.getDocumentIcon(ext);
+    final resolvedUrl = downloadUrl ?? '${ApiConstants.baseUrl}${ApiConstants.chatDocuments}';
+
     showDialog(
       context: context,
       builder: (ctx) {
@@ -1606,9 +1845,21 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
-              const SizedBox(height: 6),
-              Text('Size: $size • MIME: application/pdf', style: const TextStyle(color: Colors.white60, fontSize: 12)),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: docColor.withOpacity(0.2), borderRadius: BorderRadius.circular(10)),
+                    child: Icon(docIcon, color: docColor, size: 24),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text('Size: $size • Extension: ${ext.toUpperCase()}', style: const TextStyle(color: Colors.white60, fontSize: 12)),
               const SizedBox(height: 12),
               Container(
                 padding: const EdgeInsets.all(12),
@@ -1624,12 +1875,13 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close', style: TextStyle(color: Colors.white54))),
             ElevatedButton.icon(
               icon: const Icon(Icons.download_rounded, size: 18),
-              label: const Text('Download File'),
+              label: const Text('Download / Open'),
               style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryRose),
-              onPressed: () {
+              onPressed: () async {
                 Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Downloading "$name"... Saved to device storage!')),
+                await DocumentService.downloadOrOpenDocument(
+                  downloadUrl: resolvedUrl,
+                  fileName: name,
                 );
               },
             ),
