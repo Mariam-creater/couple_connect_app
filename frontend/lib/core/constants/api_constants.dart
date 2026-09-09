@@ -5,6 +5,9 @@ class ApiConstants {
   // Auth & Profile
   static const String register = '$baseUrl/auth/register';
   static const String login = '$baseUrl/auth/login';
+  static const String googleAuth = '$baseUrl/auth/google';
+  static const String setCredentials = '$baseUrl/auth/set-credentials';
+  static const String checkUsername = '$baseUrl/auth/check-username';
   static const String socialLogin = '$baseUrl/auth/social-login';
   static const String forgotPassword = '$baseUrl/auth/forgot-password';
   static const String resetPassword = '$baseUrl/auth/reset-password';

@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../services/secure_token_storage.dart';
+
 class ApiResponse<T> {
   final bool isSuccess;
   final String message;
@@ -20,20 +22,17 @@ class ApiClient {
   static String? _authToken;
 
   static Future<void> init() async {
-    final prefs = await SharedPreferences.getInstance();
-    _authToken = prefs.getString('auth_token');
+    _authToken = await SecureTokenStorage().getToken();
   }
 
   static Future<void> setAuthToken(String token) async {
     _authToken = token;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('auth_token', token);
+    await SecureTokenStorage().saveToken(token);
   }
 
   static Future<void> clearAuthToken() async {
     _authToken = null;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('auth_token');
+    await SecureTokenStorage().clearAll();
   }
 
   static Map<String, String> get _headers => {

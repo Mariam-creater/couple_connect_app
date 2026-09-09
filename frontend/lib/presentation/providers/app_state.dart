@@ -3,6 +3,7 @@ import '../../core/constants/api_constants.dart';
 import '../../core/crypto/e2ee_engine.dart';
 import '../../core/network/api_client.dart';
 import '../../core/services/document_service.dart';
+import '../../core/services/google_auth_service.dart';
 import '../../data/models/models.dart';
 
 class AppState extends ChangeNotifier {
@@ -80,6 +81,104 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  Future<bool> signInWithGoogle() async {
+    try {
+      isLoading = true;
+      errorMessage = null;
+      notifyListeners();
+
+      final googleResult = await GoogleAuthService().signIn();
+      if (!googleResult.success) {
+        isLoading = false;
+        errorMessage = googleResult.errorMessage ?? 'Google Sign-In was cancelled.';
+        notifyListeners();
+        return false;
+      }
+
+      final res = await ApiClient.post(ApiConstants.googleAuth, {
+        'google_id': googleResult.googleId,
+        'email': googleResult.email,
+        'name': googleResult.displayName,
+        'avatar': googleResult.photoUrl,
+        if (googleResult.idToken != null) 'id_token': googleResult.idToken,
+      });
+
+      isLoading = false;
+      if (res.isSuccess && res.data != null) {
+        final token = res.data['token'];
+        await ApiClient.setAuthToken(token);
+        currentUser = UserModel.fromJson(Map<String, dynamic>.from(res.data['user']));
+        if (res.data['partner'] != null) {
+          partner = UserModel.fromJson(Map<String, dynamic>.from(res.data['partner']));
+        }
+        if (res.data['user']['couple_space'] != null) {
+          coupleSpace = CoupleSpaceModel.fromJson(Map<String, dynamic>.from(res.data['user']['couple_space']));
+        }
+        notifyListeners();
+        fetchInitialData().catchError((e) {
+          debugPrint('Error fetching initial data: $e');
+        });
+        return true;
+      } else {
+        errorMessage = res.message.isNotEmpty ? res.message : 'Google authentication failed on server.';
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      isLoading = false;
+      errorMessage = 'Google Sign-In failed: ${e.toString()}';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> setAccountCredentials({
+    required String username,
+    required String password,
+    required String passwordConfirmation,
+  }) async {
+    try {
+      isLoading = true;
+      errorMessage = null;
+      notifyListeners();
+
+      final res = await ApiClient.post(ApiConstants.setCredentials, {
+        'username': username.trim(),
+        'password': password.trim(),
+        'password_confirmation': passwordConfirmation.trim(),
+      });
+
+      isLoading = false;
+      if (res.isSuccess && res.data != null) {
+        currentUser = UserModel.fromJson(Map<String, dynamic>.from(res.data['user']));
+        notifyListeners();
+        return true;
+      } else {
+        errorMessage = res.message.isNotEmpty ? res.message : 'Failed to set account credentials.';
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      isLoading = false;
+      errorMessage = 'Set credentials error: ${e.toString()}';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> checkUsernameAvailability(String username) async {
+    if (username.trim().isEmpty) return false;
+    try {
+      final res = await ApiClient.get('${ApiConstants.checkUsername}?username=${Uri.encodeComponent(username.trim())}');
+      if (res.isSuccess && res.data != null) {
+        return res.data['is_available'] == true;
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<bool> socialLogin({required String provider, required String token, String? name, String? email}) async {
     isLoading = true;
     errorMessage = null;
@@ -113,30 +212,40 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<bool> register(String name, String username, String email, String password, {String? bio, String? gender, String? birthday}) async {
+  Future<bool> register(
+    String name,
+    String username,
+    String email,
+    String password, {
+    String? passwordConfirmation,
+    String? bio,
+    String? gender,
+    String? birthday,
+  }) async {
     isLoading = true;
     errorMessage = null;
     notifyListeners();
 
     final res = await ApiClient.post(ApiConstants.register, {
-      'name': name,
-      'username': username,
-      'email': email,
-      'password': password,
-      'bio': bio,
-      'gender': gender,
-      'birthday': birthday,
+      'name': name.trim(),
+      'username': username.trim(),
+      'email': email.trim(),
+      'password': password.trim(),
+      'password_confirmation': (passwordConfirmation ?? password).trim(),
+      if (bio != null) 'bio': bio,
+      if (gender != null) 'gender': gender,
+      if (birthday != null) 'birthday': birthday,
     });
 
     isLoading = false;
     if (res.isSuccess && res.data != null) {
       final token = res.data['token'];
       await ApiClient.setAuthToken(token);
-      currentUser = UserModel.fromJson(res.data['user']);
+      currentUser = UserModel.fromJson(Map<String, dynamic>.from(res.data['user']));
       notifyListeners();
       return true;
     } else {
-      errorMessage = res.message;
+      errorMessage = res.message.isNotEmpty ? res.message : 'Registration failed.';
       notifyListeners();
       return false;
     }

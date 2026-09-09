@@ -16,6 +16,9 @@ class UserModel {
   final String? phone;
   final bool privacyShowOnlineStatus;
   final bool privacyShowReadReceipts;
+  final String? googleId;
+  final bool hasPassword;
+  final bool isGoogleLinked;
 
   UserModel({
     required this.id,
@@ -35,6 +38,9 @@ class UserModel {
     this.phone,
     this.privacyShowOnlineStatus = true,
     this.privacyShowReadReceipts = true,
+    this.googleId,
+    this.hasPassword = true,
+    this.isGoogleLinked = false,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -51,7 +57,7 @@ class UserModel {
       name: json['name']?.toString() ?? '',
       username: json['username']?.toString() ?? '',
       email: json['email']?.toString() ?? '',
-      avatarUrl: json['avatar_url']?.toString(),
+      avatarUrl: json['avatar_url']?.toString() ?? json['avatar']?.toString(),
       coupleId: json['couple_id']?.toString() ?? '',
       relationshipStatus: json['relationship_status']?.toString() ?? 'single',
       coupleSpaceId: json['couple_space_id'] is num ? (json['couple_space_id'] as num).toInt() : int.tryParse(json['couple_space_id']?.toString() ?? ''),
@@ -64,6 +70,9 @@ class UserModel {
       phone: json['phone']?.toString(),
       privacyShowOnlineStatus: parseBool(json['privacy_show_online_status'], true),
       privacyShowReadReceipts: parseBool(json['privacy_show_read_receipts'], true),
+      googleId: json['google_id']?.toString(),
+      hasPassword: json['has_password'] != null ? parseBool(json['has_password'], true) : (json['google_id'] == null || json['password'] != null),
+      isGoogleLinked: json['is_google_linked'] != null ? parseBool(json['is_google_linked'], false) : (json['google_id'] != null),
     );
   }
 

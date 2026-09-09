@@ -17,7 +17,7 @@ return new class extends Migration
             $table->string('username')->unique();
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
-            $table->string('password');
+            $table->string('password')->nullable();
             $table->string('avatar_url')->nullable();
             $table->string('couple_id', 20)->unique();
             $table->enum('relationship_status', ['single', 'pending', 'connected'])->default('single');

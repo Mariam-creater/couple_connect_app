@@ -5,6 +5,7 @@ import '../../providers/app_state.dart';
 import '../auth/login_screen.dart';
 import '../admin/admin_dashboard_screen.dart';
 import 'edit_profile_screen.dart';
+import '../../widgets/set_credentials_modal.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -140,6 +141,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   activeColor: AppTheme.primaryRose,
                   onChanged: (val) => setState(() => _notificationsEnabled = val),
                 ),
+                const Divider(color: Colors.white10, height: 1),
+                ListTile(
+                  leading: const Icon(Icons.key_rounded, color: AppTheme.accentGold),
+                  title: Text(
+                    user?.hasPassword == true ? 'Update Username & Password' : 'Set Username & Password',
+                    style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: Text(
+                    user?.hasPassword == true
+                        ? 'Native credentials enabled (@${user?.username})'
+                        : '⚠️ No password set. Set credentials to log in with password.',
+                    style: TextStyle(
+                      color: user?.hasPassword == true ? Colors.white54 : AppTheme.accentGold,
+                      fontSize: 12,
+                    ),
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white60),
+                  onTap: () async {
+                    await SetCredentialsModal.show(context);
+                  },
+                ),
+                if (user?.isGoogleLinked == true) ...[
+                  const Divider(color: Colors.white10, height: 1),
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.g_mobiledata_rounded, color: Colors.redAccent, size: 18),
+                    ),
+                    title: const Text('Google Account Linked', style: TextStyle(color: Colors.white, fontSize: 14)),
+                    subtitle: Text(user?.email ?? 'Connected', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                    trailing: const Icon(Icons.check_circle_rounded, color: Colors.greenAccent, size: 20),
+                  ),
+                ],
               ],
             ),
           ),

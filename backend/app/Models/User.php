@@ -18,6 +18,8 @@ class User extends Authenticatable
         'username',
         'email',
         'password',
+        'google_id',
+        'avatar',
         'avatar_url',
         'bio',
         'gender',
@@ -89,5 +91,15 @@ class User extends Authenticatable
     public function isAdmin(): bool
     {
         return $this->role === 'admin';
+    }
+
+    public function hasPassword(): bool
+    {
+        return !empty($this->password);
+    }
+
+    public function isGoogleLinked(): bool
+    {
+        return !empty($this->google_id) || ($this->social_provider === 'google' && !empty($this->social_id));
     }
 }

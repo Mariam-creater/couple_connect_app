@@ -283,53 +283,53 @@ class _LoginScreenState extends State<LoginScreen> {
                       children: [
                         Expanded(
                           child: OutlinedButton.icon(
-                            icon: const Icon(Icons.g_mobiledata_rounded, color: Colors.white, size: 24),
-                            label: const Text('Google', style: TextStyle(color: Colors.white, fontSize: 13)),
+                            icon: Container(
+                              padding: const EdgeInsets.all(2),
+                              decoration: const BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.g_mobiledata_rounded, color: Colors.redAccent, size: 20),
+                            ),
+                            label: const Text('Google Sign-In', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
                             style: OutlinedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 12),
-                              side: BorderSide(color: Colors.white.withOpacity(0.15)),
+                              side: BorderSide(color: Colors.white.withOpacity(0.2)),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              backgroundColor: Colors.white.withOpacity(0.04),
                             ),
-                            onPressed: () async {
-                              final ok = await appState.socialLogin(
-                                provider: 'google',
-                                token: 'google_oauth_token_simulated',
-                                name: 'Google Partner',
-                                email: 'saam@coupleconnect.app',
-                              );
-                              if (ok && mounted) {
-                                Navigator.pushReplacement(
-                                  context,
-                                  MaterialPageRoute(builder: (_) => const HomeScreen()),
-                                );
-                              }
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            icon: const Icon(Icons.apple_rounded, color: Colors.white, size: 22),
-                            label: const Text('Apple', style: TextStyle(color: Colors.white, fontSize: 13)),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              side: BorderSide(color: Colors.white.withOpacity(0.15)),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                            ),
-                            onPressed: () async {
-                              final ok = await appState.socialLogin(
-                                provider: 'apple',
-                                token: 'apple_identity_token_simulated',
-                                name: 'Apple Partner',
-                                email: 'boqran@coupleconnect.app',
-                              );
-                              if (ok && mounted) {
-                                Navigator.pushReplacement(
-                                  context,
-                                  MaterialPageRoute(builder: (_) => const HomeScreen()),
-                                );
-                              }
-                            },
+                            onPressed: appState.isLoading
+                                ? null
+                                : () async {
+                                    final ok = await appState.signInWithGoogle();
+                                    if (ok && mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Ku soo dhawoow ${appState.currentUser?.name ?? "Partner"}! (Google) ❤️'),
+                                          backgroundColor: Colors.green,
+                                          duration: const Duration(seconds: 2),
+                                        ),
+                                      );
+                                      if (appState.isConnectedWithPartner) {
+                                        Navigator.pushReplacement(
+                                          context,
+                                          MaterialPageRoute(builder: (_) => const HomeScreen()),
+                                        );
+                                      } else {
+                                        Navigator.pushReplacement(
+                                          context,
+                                          MaterialPageRoute(builder: (_) => const CoupleConnectScreen()),
+                                        );
+                                      }
+                                    } else if (!ok && mounted && appState.errorMessage != null) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(appState.errorMessage!),
+                                          backgroundColor: Colors.redAccent,
+                                        ),
+                                      );
+                                    }
+                                  },
                           ),
                         ),
                       ],

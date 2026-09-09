@@ -38,15 +38,18 @@ Route::prefix('v1')->group(function () {
     // Public Authentication Endpoints
     Route::post('/auth/register', [AuthController::class, 'register']);
     Route::post('/auth/login', [AuthController::class, 'login']);
+    Route::post('/auth/google', [AuthController::class, 'googleAuth']);
     Route::post('/auth/social-login', [AuthController::class, 'socialLogin']);
+    Route::get('/auth/check-username', [AuthController::class, 'checkUsername']);
     Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword']);
     Route::post('/auth/reset-password', [AuthController::class, 'resetPassword']);
 
     // Protected Authenticated Endpoints (Sanctum)
     Route::middleware('auth:sanctum')->group(function () {
 
-        // User Profile & Security
+        // User Profile, Credentials & Security
         Route::get('/auth/me', [AuthController::class, 'me']);
+        Route::post('/auth/set-credentials', [AuthController::class, 'setCredentials']);
         Route::put('/auth/profile', [AuthController::class, 'updateProfile']);
         Route::put('/auth/privacy', [AuthController::class, 'updatePrivacySettings']);
         Route::post('/auth/security', [AuthController::class, 'updateSecurity']);
