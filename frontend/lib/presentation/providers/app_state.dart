@@ -39,31 +39,41 @@ class AppState extends ChangeNotifier {
 
   // --- AUTHENTICATION ---
   Future<bool> login(String login, String password) async {
-    isLoading = true;
-    errorMessage = null;
-    notifyListeners();
-
-    final res = await ApiClient.post(ApiConstants.login, {
-      'login': login,
-      'password': password,
-    });
-
-    isLoading = false;
-    if (res.isSuccess && res.data != null) {
-      final token = res.data['token'];
-      await ApiClient.setAuthToken(token);
-      currentUser = UserModel.fromJson(res.data['user']);
-      if (res.data['partner'] != null) {
-        partner = UserModel.fromJson(res.data['partner']);
-      }
-      if (res.data['user']['couple_space'] != null) {
-        coupleSpace = CoupleSpaceModel.fromJson(res.data['user']['couple_space']);
-      }
+    try {
+      isLoading = true;
+      errorMessage = null;
       notifyListeners();
-      await fetchInitialData();
-      return true;
-    } else {
-      errorMessage = res.message;
+
+      final res = await ApiClient.post(ApiConstants.login, {
+        'login': login.trim(),
+        'password': password.trim(),
+      });
+
+      isLoading = false;
+      if (res.isSuccess && res.data != null) {
+        final token = res.data['token'];
+        await ApiClient.setAuthToken(token);
+        currentUser = UserModel.fromJson(Map<String, dynamic>.from(res.data['user']));
+        if (res.data['partner'] != null) {
+          partner = UserModel.fromJson(Map<String, dynamic>.from(res.data['partner']));
+        }
+        if (res.data['user']['couple_space'] != null) {
+          coupleSpace = CoupleSpaceModel.fromJson(Map<String, dynamic>.from(res.data['user']['couple_space']));
+        }
+        notifyListeners();
+        // Load initial data asynchronously in background
+        fetchInitialData().catchError((e) {
+          debugPrint('Error fetching initial data: $e');
+        });
+        return true;
+      } else {
+        errorMessage = res.message.isNotEmpty ? res.message : 'Invalid login credentials.';
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      isLoading = false;
+      errorMessage = 'Login error: ${e.toString()}';
       notifyListeners();
       return false;
     }

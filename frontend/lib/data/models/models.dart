@@ -38,24 +38,32 @@ class UserModel {
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
+    bool parseBool(dynamic val, bool defaultVal) {
+      if (val == null) return defaultVal;
+      if (val is bool) return val;
+      if (val is num) return val == 1;
+      if (val is String) return val == '1' || val.toLowerCase() == 'true';
+      return defaultVal;
+    }
+
     return UserModel(
-      id: json['id'] ?? 0,
-      name: json['name'] ?? '',
-      username: json['username'] ?? '',
-      email: json['email'] ?? '',
-      avatarUrl: json['avatar_url'],
-      coupleId: json['couple_id'] ?? '',
-      relationshipStatus: json['relationship_status'] ?? 'single',
-      coupleSpaceId: json['couple_space_id'],
-      publicKey: json['public_key'],
-      biometricEnabled: json['biometric_enabled'] ?? false,
-      onlineStatus: json['online_status'] ?? 'offline',
-      bio: json['bio'],
-      gender: json['gender'],
-      birthday: json['birthday'],
-      phone: json['phone'],
-      privacyShowOnlineStatus: json['privacy_show_online_status'] ?? true,
-      privacyShowReadReceipts: json['privacy_show_read_receipts'] ?? true,
+      id: json['id'] is num ? (json['id'] as num).toInt() : int.tryParse(json['id']?.toString() ?? '0') ?? 0,
+      name: json['name']?.toString() ?? '',
+      username: json['username']?.toString() ?? '',
+      email: json['email']?.toString() ?? '',
+      avatarUrl: json['avatar_url']?.toString(),
+      coupleId: json['couple_id']?.toString() ?? '',
+      relationshipStatus: json['relationship_status']?.toString() ?? 'single',
+      coupleSpaceId: json['couple_space_id'] is num ? (json['couple_space_id'] as num).toInt() : int.tryParse(json['couple_space_id']?.toString() ?? ''),
+      publicKey: json['public_key']?.toString(),
+      biometricEnabled: parseBool(json['biometric_enabled'], false),
+      onlineStatus: json['online_status']?.toString() ?? 'offline',
+      bio: json['bio']?.toString(),
+      gender: json['gender']?.toString(),
+      birthday: json['birthday']?.toString(),
+      phone: json['phone']?.toString(),
+      privacyShowOnlineStatus: parseBool(json['privacy_show_online_status'], true),
+      privacyShowReadReceipts: parseBool(json['privacy_show_read_receipts'], true),
     );
   }
 
@@ -113,13 +121,13 @@ class CoupleRequestModel {
 
   factory CoupleRequestModel.fromJson(Map<String, dynamic> json) {
     return CoupleRequestModel(
-      id: json['id'] ?? 0,
-      senderId: json['sender_id'] ?? 0,
-      receiverId: json['receiver_id'] ?? 0,
-      status: json['status'] ?? 'pending',
-      createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
-      sender: json['sender'] != null ? UserModel.fromJson(json['sender']) : null,
-      receiver: json['receiver'] != null ? UserModel.fromJson(json['receiver']) : null,
+      id: json['id'] is num ? (json['id'] as num).toInt() : 0,
+      senderId: json['sender_id'] is num ? (json['sender_id'] as num).toInt() : 0,
+      receiverId: json['receiver_id'] is num ? (json['receiver_id'] as num).toInt() : 0,
+      status: json['status']?.toString() ?? 'pending',
+      createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ?? DateTime.now(),
+      sender: json['sender'] != null ? UserModel.fromJson(Map<String, dynamic>.from(json['sender'])) : null,
+      receiver: json['receiver'] != null ? UserModel.fromJson(Map<String, dynamic>.from(json['receiver'])) : null,
     );
   }
 }
@@ -147,14 +155,14 @@ class CoupleSpaceModel {
 
   factory CoupleSpaceModel.fromJson(Map<String, dynamic> json) {
     return CoupleSpaceModel(
-      id: json['id'] ?? 0,
-      uuid: json['uuid'] ?? '',
-      spaceName: json['space_name'] ?? 'Our Space',
-      themePreset: json['theme_preset'] ?? 'rose_gold',
-      connectedAt: DateTime.tryParse(json['connected_at'] ?? '') ?? DateTime.now(),
-      anniversaryDate: json['anniversary_date'],
-      userOne: json['user_one'] != null ? UserModel.fromJson(json['user_one']) : null,
-      userTwo: json['user_two'] != null ? UserModel.fromJson(json['user_two']) : null,
+      id: json['id'] is num ? (json['id'] as num).toInt() : 0,
+      uuid: json['uuid']?.toString() ?? '',
+      spaceName: json['space_name']?.toString() ?? 'Our Space',
+      themePreset: json['theme_preset']?.toString() ?? 'rose_gold',
+      connectedAt: DateTime.tryParse(json['connected_at']?.toString() ?? '') ?? DateTime.now(),
+      anniversaryDate: json['anniversary_date']?.toString(),
+      userOne: json['user_one'] != null ? UserModel.fromJson(Map<String, dynamic>.from(json['user_one'])) : null,
+      userTwo: json['user_two'] != null ? UserModel.fromJson(Map<String, dynamic>.from(json['user_two'])) : null,
     );
   }
 }
@@ -172,9 +180,9 @@ class MessageReactionModel {
 
   factory MessageReactionModel.fromJson(Map<String, dynamic> json) {
     return MessageReactionModel(
-      id: json['id'] ?? 0,
-      userId: json['user_id'] ?? 0,
-      reaction: json['reaction'] ?? '❤️',
+      id: json['id'] is num ? (json['id'] as num).toInt() : 0,
+      userId: json['user_id'] is num ? (json['user_id'] as num).toInt() : 0,
+      reaction: json['reaction']?.toString() ?? '❤️',
     );
   }
 }
@@ -213,21 +221,29 @@ class MessageModel {
   });
 
   factory MessageModel.fromJson(Map<String, dynamic> json) {
+    bool parseBool(dynamic val) {
+      if (val == null) return false;
+      if (val is bool) return val;
+      if (val is num) return val == 1;
+      if (val is String) return val == '1' || val.toLowerCase() == 'true';
+      return false;
+    }
+
     final rawReactions = (json['reactions'] as List? ?? []);
     return MessageModel(
-      id: json['id'] ?? 0,
-      messageUuid: json['message_uuid'] ?? '',
-      senderId: json['sender_id'] ?? 0,
-      type: json['type'] ?? 'text',
-      encryptedPayload: json['encrypted_payload'] ?? '',
-      iv: json['iv'] ?? '',
-      mac: json['mac'],
-      isPinned: json['is_pinned'] ?? false,
-      isEdited: json['is_edited'] ?? false,
-      status: json['status'] ?? 'sent',
-      createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
-      metadata: json['metadata'],
-      reactions: rawReactions.map((r) => MessageReactionModel.fromJson(r)).toList(),
+      id: json['id'] is num ? (json['id'] as num).toInt() : 0,
+      messageUuid: json['message_uuid']?.toString() ?? '',
+      senderId: json['sender_id'] is num ? (json['sender_id'] as num).toInt() : 0,
+      type: json['type']?.toString() ?? 'text',
+      encryptedPayload: json['encrypted_payload']?.toString() ?? '',
+      iv: json['iv']?.toString() ?? '',
+      mac: json['mac']?.toString(),
+      isPinned: parseBool(json['is_pinned']),
+      isEdited: parseBool(json['is_edited']),
+      status: json['status']?.toString() ?? 'sent',
+      createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ?? DateTime.now(),
+      metadata: json['metadata'] != null ? Map<String, dynamic>.from(json['metadata']) : null,
+      reactions: rawReactions.map((r) => MessageReactionModel.fromJson(Map<String, dynamic>.from(r))).toList(),
     );
   }
 }
@@ -262,19 +278,27 @@ class CalendarEventModel {
   });
 
   factory CalendarEventModel.fromJson(Map<String, dynamic> json) {
+    bool parseBool(dynamic val) {
+      if (val == null) return false;
+      if (val is bool) return val;
+      if (val is num) return val == 1;
+      if (val is String) return val == '1' || val.toLowerCase() == 'true';
+      return false;
+    }
+
     return CalendarEventModel(
-      id: json['id'] ?? 0,
-      title: json['title'] ?? '',
-      description: json['description'],
-      category: json['category'] ?? 'date_night',
-      colorHex: json['color_hex'] ?? '#E91E63',
-      startTime: DateTime.tryParse(json['start_time'] ?? '') ?? DateTime.now(),
-      endTime: json['end_time'] != null ? DateTime.tryParse(json['end_time']) : null,
-      isAllDay: json['is_all_day'] ?? false,
-      isCountdown: json['is_countdown'] ?? false,
-      recurrence: json['recurrence'] ?? 'none',
-      reminderMinutesBefore: json['reminder_minutes_before'] ?? 60,
-      location: json['location'],
+      id: json['id'] is num ? (json['id'] as num).toInt() : 0,
+      title: json['title']?.toString() ?? '',
+      description: json['description']?.toString(),
+      category: json['category']?.toString() ?? 'date_night',
+      colorHex: json['color_hex']?.toString() ?? '#E91E63',
+      startTime: DateTime.tryParse(json['start_time']?.toString() ?? '') ?? DateTime.now(),
+      endTime: json['end_time'] != null ? DateTime.tryParse(json['end_time'].toString()) : null,
+      isAllDay: parseBool(json['is_all_day']),
+      isCountdown: parseBool(json['is_countdown']),
+      recurrence: json['recurrence']?.toString() ?? 'none',
+      reminderMinutesBefore: json['reminder_minutes_before'] is num ? (json['reminder_minutes_before'] as num).toInt() : 60,
+      location: json['location']?.toString(),
     );
   }
 }
@@ -311,20 +335,28 @@ class MemoryModel {
   });
 
   factory MemoryModel.fromJson(Map<String, dynamic> json) {
+    bool parseBool(dynamic val) {
+      if (val == null) return false;
+      if (val is bool) return val;
+      if (val is num) return val == 1;
+      if (val is String) return val == '1' || val.toLowerCase() == 'true';
+      return false;
+    }
+
     return MemoryModel(
-      id: json['id'] ?? 0,
-      uuid: json['uuid'] ?? '',
-      title: json['title'] ?? '',
-      category: json['category'] ?? 'photo',
-      albumName: json['album_name'] ?? 'Main Memories',
-      mediaPath: json['media_path'],
-      thumbnailPath: json['thumbnail_path'],
-      encryptedBody: json['encrypted_body'],
-      fileSizeBytes: json['file_size_bytes'],
-      memoryDate: DateTime.tryParse(json['memory_date'] ?? '') ?? DateTime.now(),
-      isFavorite: json['is_favorite'] ?? false,
-      isArchived: json['is_archived'] ?? false,
-      locationName: json['location_name'],
+      id: json['id'] is num ? (json['id'] as num).toInt() : 0,
+      uuid: json['uuid']?.toString() ?? '',
+      title: json['title']?.toString() ?? '',
+      category: json['category']?.toString() ?? 'photo',
+      albumName: json['album_name']?.toString() ?? 'Main Memories',
+      mediaPath: json['media_path']?.toString(),
+      thumbnailPath: json['thumbnail_path']?.toString(),
+      encryptedBody: json['encrypted_body']?.toString(),
+      fileSizeBytes: json['file_size_bytes'] is num ? (json['file_size_bytes'] as num).toInt() : null,
+      memoryDate: DateTime.tryParse(json['memory_date']?.toString() ?? '') ?? DateTime.now(),
+      isFavorite: parseBool(json['is_favorite']),
+      isArchived: parseBool(json['is_archived']),
+      locationName: json['location_name']?.toString(),
     );
   }
 }
@@ -360,20 +392,20 @@ class VisionBoardModel {
 
   factory VisionBoardModel.fromJson(Map<String, dynamic> json) {
     var rawItems = json['items'] as List? ?? [];
-    List<VisionItemModel> itemsList = rawItems.map((i) => VisionItemModel.fromJson(i)).toList();
+    List<VisionItemModel> itemsList = rawItems.map((i) => VisionItemModel.fromJson(Map<String, dynamic>.from(i))).toList();
 
     return VisionBoardModel(
-      id: json['id'] ?? 0,
-      title: json['title'] ?? '',
-      category: json['category'] ?? 'life_goals',
-      description: json['description'],
-      coverImageUrl: json['cover_image_url'],
+      id: json['id'] is num ? (json['id'] as num).toInt() : 0,
+      title: json['title']?.toString() ?? '',
+      category: json['category']?.toString() ?? 'life_goals',
+      description: json['description']?.toString(),
+      coverImageUrl: json['cover_image_url']?.toString(),
       targetDate: json['target_date'] != null ? DateTime.tryParse(json['target_date'].toString()) : null,
       targetAmount: json['target_amount'] != null ? double.tryParse(json['target_amount'].toString()) : null,
       currentAmount: double.tryParse(json['current_amount']?.toString() ?? '0') ?? 0,
-      progressPercentage: json['progress_percentage'] ?? 0,
-      status: json['status'] ?? 'dream',
-      priority: json['priority'] ?? 'medium',
+      progressPercentage: json['progress_percentage'] is num ? (json['progress_percentage'] as num).toInt() : 0,
+      status: json['status']?.toString() ?? 'dream',
+      priority: json['priority']?.toString() ?? 'medium',
       items: itemsList,
     );
   }
@@ -397,13 +429,21 @@ class VisionItemModel {
   });
 
   factory VisionItemModel.fromJson(Map<String, dynamic> json) {
+    bool parseBool(dynamic val) {
+      if (val == null) return false;
+      if (val is bool) return val;
+      if (val is num) return val == 1;
+      if (val is String) return val == '1' || val.toLowerCase() == 'true';
+      return false;
+    }
+
     return VisionItemModel(
-      id: json['id'] ?? 0,
-      title: json['title'] ?? '',
-      content: json['content'],
-      type: json['type'] ?? 'checklist',
-      colorHex: json['color_hex'] ?? '#FFE082',
-      isCompleted: json['is_completed'] ?? false,
+      id: json['id'] is num ? (json['id'] as num).toInt() : 0,
+      title: json['title']?.toString() ?? '',
+      content: json['content']?.toString(),
+      type: json['type']?.toString() ?? 'checklist',
+      colorHex: json['color_hex']?.toString() ?? '#FFE082',
+      isCompleted: parseBool(json['is_completed']),
     );
   }
 }
@@ -443,26 +483,29 @@ class StreakModel {
     if (rawBadges is List) {
       badgeList = rawBadges.map((e) => e.toString()).toList();
     }
-    final msgs = json['total_messages_count'] ?? 0;
-    final games = json['total_games_played'] ?? 0;
-    final mems = json['total_memories_added'] ?? 0;
-    final goals = json['total_goals_completed'] ?? 0;
-    final calcXp = (msgs * 5) + (games * 25) + (mems * 20) + (goals * 50) + ((json['current_streak_days'] ?? 1) * 30);
+    final msgs = json['total_messages_count'] is num ? (json['total_messages_count'] as num).toInt() : 0;
+    final games = json['total_games_played'] is num ? (json['total_games_played'] as num).toInt() : 0;
+    final mems = json['total_memories_added'] is num ? (json['total_memories_added'] as num).toInt() : 0;
+    final goals = json['total_goals_completed'] is num ? (json['total_goals_completed'] as num).toInt() : 0;
+    final currentDays = json['current_streak_days'] is num ? (json['current_streak_days'] as num).toInt() : 1;
+    final longestDays = json['longest_streak_days'] is num ? (json['longest_streak_days'] as num).toInt() : 1;
+
+    final calcXp = (msgs * 5) + (games * 25) + (mems * 20) + (goals * 50) + (currentDays * 30);
     final calcLevel = (calcXp / 250).floor() + 1;
 
     return StreakModel(
-      currentStreakDays: json['current_streak_days'] ?? 1,
-      longestStreakDays: json['longest_streak_days'] ?? 1,
-      lastActivityDate: json['last_activity_date'],
+      currentStreakDays: currentDays,
+      longestStreakDays: longestDays,
+      lastActivityDate: json['last_activity_date']?.toString(),
       badges: badgeList,
       totalMessagesCount: msgs,
       totalGamesPlayed: games,
       totalMemoriesAdded: mems,
       totalGoalsCompleted: goals,
-      voiceCallMinutes: json['voice_call_minutes'] ?? 45,
-      videoCallMinutes: json['video_call_minutes'] ?? 120,
-      xp: json['xp'] ?? calcXp,
-      level: json['level'] ?? calcLevel,
+      voiceCallMinutes: json['voice_call_minutes'] is num ? (json['voice_call_minutes'] as num).toInt() : 45,
+      videoCallMinutes: json['video_call_minutes'] is num ? (json['video_call_minutes'] as num).toInt() : 120,
+      xp: json['xp'] is num ? (json['xp'] as num).toInt() : calcXp,
+      level: json['level'] is num ? (json['level'] as num).toInt() : calcLevel,
     );
   }
 }
