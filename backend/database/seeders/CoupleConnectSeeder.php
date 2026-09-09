@@ -64,6 +64,76 @@ class CoupleConnectSeeder extends Seeder
             'last_seen_at' => now(),
         ]);
 
+        // 2b. Demo Couple: Saam Ayanle (Boyfriend) & Boqran Yasin (Girlfriend)
+        $saam = User::create([
+            'name' => 'Saam Ayanle',
+            'username' => 'saam',
+            'email' => 'saam@coupleconnect.app',
+            'password' => Hash::make('password123'),
+            'avatar_url' => 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400',
+            'couple_id' => 'CP-SAAM-01',
+            'gender' => 'male',
+            'bio' => 'Forever in love with Boqran ❤️ | My Queen',
+            'birthday' => '2001-05-14',
+            'relationship_status' => 'connected',
+            'role' => 'user',
+            'biometric_enabled' => true,
+            'online_status' => 'online',
+            'last_seen_at' => now(),
+        ]);
+
+        $boqran = User::create([
+            'name' => 'Boqran Yasin',
+            'username' => 'boqran',
+            'email' => 'boqran@coupleconnect.app',
+            'password' => Hash::make('password123'),
+            'avatar_url' => 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400',
+            'couple_id' => 'CP-BOQR-02',
+            'gender' => 'female',
+            'bio' => 'Saam’s heartbeat 💕 | Soulmates forever',
+            'birthday' => '2002-08-22',
+            'relationship_status' => 'connected',
+            'role' => 'user',
+            'biometric_enabled' => true,
+            'online_status' => 'online',
+            'last_seen_at' => now(),
+        ]);
+
+        $saamSpace = CoupleSpace::create([
+            'uuid' => (string) Str::uuid(),
+            'user_one_id' => $saam->id,
+            'user_two_id' => $boqran->id,
+            'connected_at' => now()->subMonths(8),
+            'anniversary_date' => now()->subMonths(8)->toDateString(),
+            'space_name' => 'Saam & Boqran’s Love Sanctuary ❤️',
+            'theme_preset' => 'rose_gold',
+            'status' => 'active',
+        ]);
+
+        $saam->update(['couple_space_id' => $saamSpace->id]);
+        $boqran->update(['couple_space_id' => $saamSpace->id]);
+
+        CoupleStreak::create([
+            'couple_space_id' => $saamSpace->id,
+            'current_streak_days' => 50,
+            'longest_streak_days' => 50,
+            'last_activity_date' => now()->toDateString(),
+            'badges' => ['first_step', '7_day_spark', '30_day_flame', 'playful_duo', 'memory_curator'],
+            'total_messages_count' => 840,
+            'total_games_played' => 12,
+            'total_memories_added' => 15,
+            'total_goals_completed' => 5,
+        ]);
+
+        CoupleTeam::create([
+            'couple_space_id' => $saamSpace->id,
+            'team_name' => 'Team Saam & Boqran',
+            'elo_rating' => 1520,
+            'wins' => 16,
+            'losses' => 2,
+            'season_points' => 980,
+        ]);
+
         // 3. Create Couple Space
         $space = CoupleSpace::create([
             'uuid' => (string) Str::uuid(),
