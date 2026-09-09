@@ -623,10 +623,79 @@ class AppState extends ChangeNotifier {
   Future<void> fetchVisionBoards() async {
     final res = await ApiClient.get(ApiConstants.visionBoards);
     if (res.isSuccess && res.data != null) {
-      final list = res.data as List;
+      final list = (res.data['data'] ?? res.data) as List;
       visionBoards = list.map((b) => VisionBoardModel.fromJson(b)).toList();
       notifyListeners();
     }
+  }
+
+  Future<bool> createVisionBoard({
+    required String title,
+    required String category,
+    String? description,
+    String? coverImageUrl,
+    DateTime? targetDate,
+    double? targetAmount,
+    double? currentAmount,
+    String? status,
+    String? priority,
+  }) async {
+    final res = await ApiClient.post(ApiConstants.visionBoards, {
+      'title': title,
+      'category': category,
+      if (description != null) 'description': description,
+      if (coverImageUrl != null) 'cover_image_url': coverImageUrl,
+      if (targetDate != null) 'target_date': targetDate.toIso8601String().substring(0, 10),
+      if (targetAmount != null) 'target_amount': targetAmount,
+      if (currentAmount != null) 'current_amount': currentAmount,
+      if (status != null) 'status': status,
+    });
+    if (res.isSuccess) {
+      await fetchVisionBoards();
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> deleteVisionBoard(int id) async {
+    final res = await ApiClient.delete('${ApiConstants.visionBoards}/$id');
+    if (res.isSuccess) {
+      visionBoards.removeWhere((b) => b.id == id);
+      notifyListeners();
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> addVisionItem(
+    int boardId, {
+    required String title,
+    String? content,
+    String type = 'checklist',
+    String colorHex = '#FFE082',
+    int? assignedToUserId,
+  }) async {
+    final res = await ApiClient.post('${ApiConstants.visionBoards}/$boardId/items', {
+      'title': title,
+      if (content != null) 'content': content,
+      'type': type,
+      'color_hex': colorHex,
+      if (assignedToUserId != null) 'assigned_to_user_id': assignedToUserId,
+    });
+    if (res.isSuccess) {
+      await fetchVisionBoards();
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> deleteVisionItem(int itemId) async {
+    final res = await ApiClient.delete('${ApiConstants.baseUrl}/vision-boards/items/$itemId');
+    if (res.isSuccess) {
+      await fetchVisionBoards();
+      return true;
+    }
+    return false;
   }
 
   Future<void> toggleVisionItem(int itemId) async {

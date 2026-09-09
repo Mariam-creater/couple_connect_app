@@ -43,7 +43,7 @@ class VisionBoardController extends Controller
         $user = $request->user();
         $validated = $request->validate([
             'title' => 'required|string|max:255',
-            'category' => 'required|in:dream_house,travel,wedding,business,savings,education,children,life_goals',
+            'category' => 'required|in:dream_house,travel,wedding,business,savings,education,children,life_goals,wishlist',
             'description' => 'nullable|string',
             'cover_image_url' => 'nullable|string',
             'target_date' => 'nullable|date',
@@ -71,6 +71,24 @@ class VisionBoardController extends Controller
             'message' => 'Vision card created',
             'data' => $board->load('creator:id,name,avatar_url')
         ], 201);
+    }
+
+    /**
+     * Delete a vision board card.
+     */
+    public function destroy(Request $request, int $id): JsonResponse
+    {
+        $board = VisionBoard::where('id', $id)
+            ->where('couple_space_id', $request->user()->couple_space_id)
+            ->firstOrFail();
+
+        $board->items()->delete();
+        $board->delete();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Vision goal deleted successfully'
+        ]);
     }
 
     /**
@@ -104,6 +122,31 @@ class VisionBoardController extends Controller
             'status' => 'success',
             'data' => $item->load('creator:id,name')
         ], 201);
+    }
+
+    /**
+     * Delete a vision checklist/note item.
+     */
+    public function deleteItem(Request $request, int $itemId): JsonResponse
+    {
+        $item = VisionItem::whereHas('visionBoard', function ($q) use ($request) {
+            $q->where('couple_space_id', $request->user()->couple_space_id);
+        })->findOrFail($itemId);
+
+        $board = $item->visionBoard;
+        $item->delete();
+
+        if (empty($board->target_amount)) {
+            $total = $board->items()->count();
+            $completed = $board->items()->where('is_completed', true)->count();
+            $board->progress_percentage = ($total > 0) ? (int) round(($completed / $total) * 100) : 0;
+            $board->save();
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Item deleted'
+        ]);
     }
 
     /**

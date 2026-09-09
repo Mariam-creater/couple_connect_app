@@ -93,7 +93,9 @@ Route::prefix('v1')->group(function () {
         // Feature 6: Shared Vision Board
         Route::get('/vision-boards', [VisionBoardController::class, 'index']);
         Route::post('/vision-boards', [VisionBoardController::class, 'store']);
+        Route::delete('/vision-boards/{id}', [VisionBoardController::class, 'destroy']);
         Route::post('/vision-boards/{boardId}/items', [VisionBoardController::class, 'addItem']);
+        Route::delete('/vision-boards/items/{itemId}', [VisionBoardController::class, 'deleteItem']);
         Route::post('/vision-boards/items/{itemId}/toggle', [VisionBoardController::class, 'toggleItem']);
 
         // Feature 7: Couple Streak & Badges

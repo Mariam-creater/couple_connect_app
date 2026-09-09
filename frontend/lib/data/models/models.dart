@@ -308,10 +308,12 @@ class VisionBoardModel {
   final String category;
   final String? description;
   final String? coverImageUrl;
+  final DateTime? targetDate;
   final double? targetAmount;
   final double currentAmount;
   final int progressPercentage;
   final String status;
+  final String priority;
   final List<VisionItemModel> items;
 
   VisionBoardModel({
@@ -320,10 +322,12 @@ class VisionBoardModel {
     required this.category,
     this.description,
     this.coverImageUrl,
+    this.targetDate,
     this.targetAmount,
     this.currentAmount = 0,
     this.progressPercentage = 0,
     this.status = 'dream',
+    this.priority = 'medium',
     this.items = const [],
   });
 
@@ -337,10 +341,12 @@ class VisionBoardModel {
       category: json['category'] ?? 'life_goals',
       description: json['description'],
       coverImageUrl: json['cover_image_url'],
+      targetDate: json['target_date'] != null ? DateTime.tryParse(json['target_date'].toString()) : null,
       targetAmount: json['target_amount'] != null ? double.tryParse(json['target_amount'].toString()) : null,
       currentAmount: double.tryParse(json['current_amount']?.toString() ?? '0') ?? 0,
       progressPercentage: json['progress_percentage'] ?? 0,
       status: json['status'] ?? 'dream',
+      priority: json['priority'] ?? 'medium',
       items: itemsList,
     );
   }
@@ -349,13 +355,17 @@ class VisionBoardModel {
 class VisionItemModel {
   final int id;
   final String title;
+  final String? content;
   final String type;
+  final String colorHex;
   final bool isCompleted;
 
   VisionItemModel({
     required this.id,
     required this.title,
+    this.content,
     required this.type,
+    this.colorHex = '#FFE082',
     required this.isCompleted,
   });
 
@@ -363,7 +373,9 @@ class VisionItemModel {
     return VisionItemModel(
       id: json['id'] ?? 0,
       title: json['title'] ?? '',
+      content: json['content'],
       type: json['type'] ?? 'checklist',
+      colorHex: json['color_hex'] ?? '#FFE082',
       isCompleted: json['is_completed'] ?? false,
     );
   }
@@ -378,6 +390,10 @@ class StreakModel {
   final int totalGamesPlayed;
   final int totalMemoriesAdded;
   final int totalGoalsCompleted;
+  final int voiceCallMinutes;
+  final int videoCallMinutes;
+  final int xp;
+  final int level;
 
   StreakModel({
     this.currentStreakDays = 1,
@@ -388,6 +404,10 @@ class StreakModel {
     this.totalGamesPlayed = 0,
     this.totalMemoriesAdded = 0,
     this.totalGoalsCompleted = 0,
+    this.voiceCallMinutes = 45,
+    this.videoCallMinutes = 120,
+    this.xp = 480,
+    this.level = 4,
   });
 
   factory StreakModel.fromJson(Map<String, dynamic> json) {
@@ -396,15 +416,26 @@ class StreakModel {
     if (rawBadges is List) {
       badgeList = rawBadges.map((e) => e.toString()).toList();
     }
+    final msgs = json['total_messages_count'] ?? 0;
+    final games = json['total_games_played'] ?? 0;
+    final mems = json['total_memories_added'] ?? 0;
+    final goals = json['total_goals_completed'] ?? 0;
+    final calcXp = (msgs * 5) + (games * 25) + (mems * 20) + (goals * 50) + ((json['current_streak_days'] ?? 1) * 30);
+    final calcLevel = (calcXp / 250).floor() + 1;
+
     return StreakModel(
       currentStreakDays: json['current_streak_days'] ?? 1,
       longestStreakDays: json['longest_streak_days'] ?? 1,
       lastActivityDate: json['last_activity_date'],
       badges: badgeList,
-      totalMessagesCount: json['total_messages_count'] ?? 0,
-      totalGamesPlayed: json['total_games_played'] ?? 0,
-      totalMemoriesAdded: json['total_memories_added'] ?? 0,
-      totalGoalsCompleted: json['total_goals_completed'] ?? 0,
+      totalMessagesCount: msgs,
+      totalGamesPlayed: games,
+      totalMemoriesAdded: mems,
+      totalGoalsCompleted: goals,
+      voiceCallMinutes: json['voice_call_minutes'] ?? 45,
+      videoCallMinutes: json['video_call_minutes'] ?? 120,
+      xp: json['xp'] ?? calcXp,
+      level: json['level'] ?? calcLevel,
     );
   }
 }
