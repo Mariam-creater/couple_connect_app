@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../providers/app_state.dart';
 import '../auth/login_screen.dart';
+import '../admin/admin_dashboard_screen.dart';
 import 'edit_profile_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -167,6 +168,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
             decoration: AppTheme.glassBox(context: context),
             child: Column(
               children: [
+                ListTile(
+                  leading: const Icon(Icons.admin_panel_settings_rounded, color: AppTheme.accentGold),
+                  title: const Text('Admin System Control Panel', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                  subtitle: Text('Manage users, moderation reports, and server telemetry', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12)),
+                  trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white60),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
+                    );
+                  },
+                ),
+                const Divider(color: Colors.white10, height: 1),
                 ListTile(
                   leading: const Icon(Icons.logout_rounded, color: Colors.white70),
                   title: const Text('Sign Out of Space', style: TextStyle(color: Colors.white, fontSize: 14)),
