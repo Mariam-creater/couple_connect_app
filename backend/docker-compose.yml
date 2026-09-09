@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: couple_connect_api
+    restart: unless-stopped
+    working_dir: /var/www/html
+    environment:
+      APP_NAME: "Couple Connect API"
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_URL: "http://localhost:8000"
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: couple_connect
+      DB_USERNAME: couple_user
+      DB_PASSWORD: couple_password
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    volumes:
+      - .:/var/www/html
+    networks:
+      - couple_network
+    depends_on:
+      - mysql
+      - redis
+
+  web:
+    image: nginx:alpine
+    container_name: couple_connect_nginx
+    restart: unless-stopped
+    ports:
+      - "8000:80"
+    volumes:
+      - .:/var/www/html
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+    networks:
+      - couple_network
+    depends_on:
+      - app
+
+  mysql:
+    image: mysql:8.0
+    container_name: couple_connect_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: couple_connect
+      MYSQL_USER: couple_user
+      MYSQL_PASSWORD: couple_password
+      MYSQL_ROOT_PASSWORD: root_password_secret
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - couple_network
+
+  redis:
+    image: redis:alpine
+    container_name: couple_connect_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - couple_network
+
+networks:
+  couple_network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+    driver: local

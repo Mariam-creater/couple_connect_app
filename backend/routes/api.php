@@ -1,0 +1,104 @@
+<?php
+
+use App\Http\Controllers\AdminController;
+use App\Http\Controllers\AIController;
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\CalendarController;
+use App\Http\Controllers\ChatController;
+use App\Http\Controllers\CoupleController;
+use App\Http\Controllers\GameController;
+use App\Http\Controllers\MemoryController;
+use App\Http\Controllers\StreakController;
+use App\Http\Controllers\VisionBoardController;
+use Illuminate\Support\Facades\Route;
+
+/*
+|--------------------------------------------------------------------------
+| COUPLE CONNECT – REST API Routes v1
+|--------------------------------------------------------------------------
+*/
+
+Route::prefix('v1')->group(function () {
+
+    // Public Health Check
+    Route::get('/health', function () {
+        return response()->json([
+            'status' => 'online',
+            'platform' => 'Couple Connect API',
+            'version' => '1.0.0',
+            'timestamp' => now()->toIso8601String(),
+        ]);
+    });
+
+    // Public Authentication Endpoints
+    Route::post('/auth/register', [AuthController::class, 'register']);
+    Route::post('/auth/login', [AuthController::class, 'login']);
+
+    // Protected Authenticated Endpoints (Sanctum)
+    Route::middleware('auth:sanctum')->group(function () {
+
+        // User Profile & Security
+        Route::get('/auth/me', [AuthController::class, 'me']);
+        Route::post('/auth/security', [AuthController::class, 'updateSecurity']);
+        Route::post('/auth/logout', [AuthController::class, 'logout']);
+
+        // Feature 1: Couple Connection
+        Route::get('/couple/search', [CoupleController::class, 'search']);
+        Route::post('/couple/request', [CoupleController::class, 'sendRequest']);
+        Route::get('/couple/requests', [CoupleController::class, 'requests']);
+        Route::post('/couple/request/{id}/accept', [CoupleController::class, 'acceptRequest']);
+        Route::post('/couple/request/{id}/decline', [CoupleController::class, 'declineRequest']);
+        Route::get('/couple/space', [CoupleController::class, 'space']);
+        Route::put('/couple/space', [CoupleController::class, 'updateSpace']);
+
+        // Feature 2: Real-Time Chat & E2EE Messages
+        Route::get('/chat/messages', [ChatController::class, 'index']);
+        Route::post('/chat/messages', [ChatController::class, 'store']);
+        Route::post('/chat/messages/{id}/react', [ChatController::class, 'react']);
+        Route::post('/chat/messages/read', [ChatController::class, 'markRead']);
+        Route::post('/chat/messages/{id}/pin', [ChatController::class, 'togglePin']);
+        Route::delete('/chat/messages/{id}', [ChatController::class, 'destroy']);
+        Route::post('/chat/upload', [ChatController::class, 'uploadAttachment']);
+
+        // Feature 3: Love Calendar
+        Route::get('/calendar/events', [CalendarController::class, 'index']);
+        Route::post('/calendar/events', [CalendarController::class, 'store']);
+        Route::put('/calendar/events/{id}', [CalendarController::class, 'update']);
+        Route::delete('/calendar/events/{id}', [CalendarController::class, 'destroy']);
+
+        // Feature 4: Love Memories Vault
+        Route::get('/memories', [MemoryController::class, 'index']);
+        Route::post('/memories', [MemoryController::class, 'store']);
+        Route::post('/memories/{id}/favorite', [MemoryController::class, 'toggleFavorite']);
+        Route::get('/memories/albums', [MemoryController::class, 'albums']);
+
+        // Feature 5: Couple Games & Tournaments
+        Route::get('/games/sessions', [GameController::class, 'index']);
+        Route::post('/games/start', [GameController::class, 'start']);
+        Route::post('/games/sessions/{sessionCode}/move', [GameController::class, 'submitMove']);
+        Route::get('/games/leaderboard', [GameController::class, 'leaderboard']);
+
+        // Feature 6: Shared Vision Board
+        Route::get('/vision-boards', [VisionBoardController::class, 'index']);
+        Route::post('/vision-boards', [VisionBoardController::class, 'store']);
+        Route::post('/vision-boards/{boardId}/items', [VisionBoardController::class, 'addItem']);
+        Route::post('/vision-boards/items/{itemId}/toggle', [VisionBoardController::class, 'toggleItem']);
+
+        // Feature 7: Couple Streak & Badges
+        Route::get('/streak/status', [StreakController::class, 'status']);
+        Route::post('/streak/check-in', [StreakController::class, 'dailyCheckIn']);
+        Route::get('/streak/summary', [StreakController::class, 'summary']);
+
+        // Feature 8: AI Relationship Assistant
+        Route::post('/ai/analyze-tone', [AIController::class, 'analyzeTone']);
+        Route::post('/ai/generate-romance', [AIController::class, 'generateRomance']);
+        Route::post('/ai/plan-date', [AIController::class, 'planDate']);
+
+        // Admin Management
+        Route::prefix('admin')->group(function () {
+            Route::get('/dashboard', [AdminController::class, 'dashboard']);
+            Route::get('/users', [AdminController::class, 'users']);
+            Route::get('/reports', [AdminController::class, 'reports']);
+        });
+    });
+});
