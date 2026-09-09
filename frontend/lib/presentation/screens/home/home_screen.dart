@@ -50,36 +50,48 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       body: Row(
         children: [
-          // Desktop / Web Side Navigation Rail
+          // Desktop / Web Side Navigation Rail with Scrollable Protection
           if (isWide)
-            NavigationRail(
-              backgroundColor: isDark ? const Color(0xFF161522) : Colors.white,
-              selectedIndex: _currentIndex,
-              onDestinationSelected: (index) => setState(() => _currentIndex = index),
-              labelType: NavigationRailLabelType.all,
-              leading: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 20.0),
-                child: Container(
-                  width: 48,
-                  height: 48,
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(colors: [AppTheme.primaryRose, AppTheme.accentGold]),
+            LayoutBuilder(
+              builder: (context, constraint) {
+                return SingleChildScrollView(
+                  physics: const ClampingScrollPhysics(),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: constraint.maxHeight),
+                    child: IntrinsicHeight(
+                      child: NavigationRail(
+                        backgroundColor: isDark ? const Color(0xFF161522) : Colors.white,
+                        selectedIndex: _currentIndex,
+                        onDestinationSelected: (index) => setState(() => _currentIndex = index),
+                        labelType: NavigationRailLabelType.all,
+                        leading: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 16.0),
+                          child: Container(
+                            width: 44,
+                            height: 44,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: LinearGradient(colors: [AppTheme.primaryRose, AppTheme.accentGold]),
+                            ),
+                            child: const Icon(Icons.favorite_rounded, color: Colors.white, size: 24),
+                          ),
+                        ),
+                        destinations: const [
+                          NavigationRailDestination(icon: Icon(Icons.favorite_outline_rounded), selectedIcon: Icon(Icons.favorite_rounded), label: Text('Space')),
+                          NavigationRailDestination(icon: Icon(Icons.chat_bubble_outline_rounded), selectedIcon: Icon(Icons.chat_bubble_rounded), label: Text('Chat')),
+                          NavigationRailDestination(icon: Icon(Icons.calendar_month_outlined), selectedIcon: Icon(Icons.calendar_month_rounded), label: Text('Calendar')),
+                          NavigationRailDestination(icon: Icon(Icons.photo_library_outlined), selectedIcon: Icon(Icons.photo_library_rounded), label: Text('Memories')),
+                          NavigationRailDestination(icon: Icon(Icons.sports_esports_outlined), selectedIcon: Icon(Icons.sports_esports_rounded), label: Text('Games')),
+                          NavigationRailDestination(icon: Icon(Icons.dashboard_customize_outlined), selectedIcon: Icon(Icons.dashboard_customize_rounded), label: Text('Vision')),
+                          NavigationRailDestination(icon: Icon(Icons.local_fire_department_outlined), selectedIcon: Icon(Icons.local_fire_department_rounded), label: Text('Streak')),
+                          NavigationRailDestination(icon: Icon(Icons.auto_awesome_outlined), selectedIcon: Icon(Icons.auto_awesome_rounded), label: Text('AI')),
+                          NavigationRailDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings_rounded), label: Text('Settings')),
+                        ],
+                      ),
+                    ),
                   ),
-                  child: const Icon(Icons.favorite_rounded, color: Colors.white, size: 28),
-                ),
-              ),
-              destinations: const [
-                NavigationRailDestination(icon: Icon(Icons.home_rounded), label: Text('Space')),
-                NavigationRailDestination(icon: Icon(Icons.chat_bubble_rounded), label: Text('Chat')),
-                NavigationRailDestination(icon: Icon(Icons.calendar_month_rounded), label: Text('Calendar')),
-                NavigationRailDestination(icon: Icon(Icons.photo_library_rounded), label: Text('Memories')),
-                NavigationRailDestination(icon: Icon(Icons.sports_esports_rounded), label: Text('Games')),
-                NavigationRailDestination(icon: Icon(Icons.dashboard_customize_rounded), label: Text('Vision')),
-                NavigationRailDestination(icon: Icon(Icons.local_fire_department_rounded), label: Text('Streak')),
-                NavigationRailDestination(icon: Icon(Icons.auto_awesome_rounded), label: Text('AI Assistant')),
-                NavigationRailDestination(icon: Icon(Icons.settings_rounded), label: Text('Settings')),
-              ],
+                );
+              },
             ),
 
           // Main Viewport
@@ -150,8 +162,10 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 18),
               const Text('More Couple Features', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
               const SizedBox(height: 18),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                alignment: WrapAlignment.spaceAround,
                 children: [
                   _buildModalFeatureTile('Games', Icons.sports_esports_rounded, Colors.purpleAccent, 4),
                   _buildModalFeatureTile('Vision Board', Icons.dashboard_customize_rounded, Colors.amberAccent, 5),
