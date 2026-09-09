@@ -15,9 +15,23 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _loginController = TextEditingController(text: 'alex@coupleconnect.app');
-  final _passwordController = TextEditingController(text: 'Password123!');
+  final _loginController = TextEditingController(text: 'saam');
+  final _passwordController = TextEditingController(text: 'password123');
   bool _obscurePassword = true;
+
+  @override
+  void dispose() {
+    _loginController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  void _fillAccount(String login, String password) {
+    setState(() {
+      _loginController.text = login;
+      _passwordController.text = password;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,11 +53,11 @@ class _LoginScreenState extends State<LoginScreen> {
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 28.0, vertical: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16),
               child: Container(
-                constraints: const BoxConstraints(maxWidth: 440),
+                constraints: const BoxConstraints(maxWidth: 460),
                 decoration: AppTheme.glassBox(context: context, radius: 28),
-                padding: const EdgeInsets.all(32.0),
+                padding: const EdgeInsets.all(28.0),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -51,8 +65,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     // Brand Icon & Header
                     Center(
                       child: Container(
-                        width: 72,
-                        height: 72,
+                        width: 68,
+                        height: 68,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           gradient: const LinearGradient(
@@ -66,22 +80,59 @@ class _LoginScreenState extends State<LoginScreen> {
                             )
                           ],
                         ),
-                        child: const Icon(Icons.favorite_rounded, color: Colors.white, size: 38),
+                        child: const Icon(Icons.favorite_rounded, color: Colors.white, size: 36),
                       ),
                     ),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 16),
                     Text(
                       'Couple Connect',
                       textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.displayLarge?.copyWith(fontSize: 28),
+                      style: Theme.of(context).textTheme.displayLarge?.copyWith(fontSize: 26, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       'Your intimate, encrypted world for two.',
                       textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodyMedium,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.white60),
                     ),
-                    const SizedBox(height: 28),
+                    const SizedBox(height: 20),
+
+                    // Quick Demo Login Selector Chips
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.04),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.white10),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Wrap(
+                            alignment: WrapAlignment.spaceBetween,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: const [
+                              Text('⚡ 1-Click Demo Accounts:', style: TextStyle(color: AppTheme.accentGold, fontSize: 12, fontWeight: FontWeight.bold)),
+                              SizedBox(width: 8),
+                              Text('Pass: password123', style: TextStyle(color: Colors.white38, fontSize: 10)),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              _buildDemoChip('👦 Saam (Boyfriend)', 'saam', 'password123', AppTheme.primaryRose),
+                              _buildDemoChip('👧 Boqran (Girlfriend)', 'boqran', 'password123', Colors.pinkAccent),
+                              _buildDemoChip('👤 Alex', 'alex', 'password123', Colors.blueAccent),
+                              _buildDemoChip('👩 Sophia', 'sophia', 'password123', Colors.purpleAccent),
+                              _buildDemoChip('🛡️ Admin', 'admin', 'password123', Colors.amberAccent),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 18),
 
                     if (appState.errorMessage != null) ...[
                       Container(
@@ -97,7 +148,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           textAlign: TextAlign.center,
                         ),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 14),
                     ],
 
                     // Input: Email / Username / Couple ID
@@ -115,7 +166,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: AppTheme.primaryRose)),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
 
                     // Input: Password
                     TextField(
@@ -158,7 +209,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 18),
 
                     // Login Action Button
                     ElevatedButton(
@@ -172,11 +223,28 @@ class _LoginScreenState extends State<LoginScreen> {
                       onPressed: appState.isLoading
                           ? null
                           : () async {
-                              final success = await appState.login(
-                                _loginController.text.trim(),
-                                _passwordController.text,
-                              );
+                              final loginInput = _loginController.text.trim();
+                              final passwordInput = _passwordController.text.trim();
+
+                              if (loginInput.isEmpty || passwordInput.isEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Fadlan geli username/email iyo password-ka'),
+                                    backgroundColor: Colors.redAccent,
+                                  ),
+                                );
+                                return;
+                              }
+
+                              final success = await appState.login(loginInput, passwordInput);
                               if (success && mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Ku soo dhawoow ${appState.currentUser?.name ?? "Partner"}! ❤️'),
+                                    backgroundColor: Colors.green,
+                                    duration: const Duration(seconds: 2),
+                                  ),
+                                );
                                 if (appState.isConnectedWithPartner) {
                                   Navigator.pushReplacement(
                                     context,
@@ -188,6 +256,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                     MaterialPageRoute(builder: (_) => const CoupleConnectScreen()),
                                   );
                                 }
+                              } else if (!success && mounted && appState.errorMessage != null) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(appState.errorMessage!),
+                                    backgroundColor: Colors.redAccent,
+                                  ),
+                                );
                               }
                             },
                       child: appState.isLoading
@@ -201,7 +276,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                             ),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 18),
 
                     // Social Login Providers (Google & Apple)
                     Row(
@@ -220,7 +295,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 provider: 'google',
                                 token: 'google_oauth_token_simulated',
                                 name: 'Google Partner',
-                                email: 'alex@coupleconnect.app',
+                                email: 'saam@coupleconnect.app',
                               );
                               if (ok && mounted) {
                                 Navigator.pushReplacement(
@@ -246,7 +321,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 provider: 'apple',
                                 token: 'apple_identity_token_simulated',
                                 name: 'Apple Partner',
-                                email: 'sophia@coupleconnect.app',
+                                email: 'boqran@coupleconnect.app',
                               );
                               if (ok && mounted) {
                                 Navigator.pushReplacement(
@@ -258,21 +333,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Demo Login Helper
-                    TextButton(
-                      onPressed: () {
-                        setState(() {
-                          _loginController.text = 'sophia@coupleconnect.app';
-                          _passwordController.text = 'Password123!';
-                        });
-                      },
-                      child: Text(
-                        'Switch to Partner Demo (Sophia)',
-                        style: TextStyle(color: AppTheme.accentGold.withOpacity(0.8), fontSize: 13),
-                      ),
                     ),
 
                     const Divider(color: Colors.white12, height: 28),
@@ -302,6 +362,25 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDemoChip(String label, String username, String password, Color color) {
+    return InkWell(
+      onTap: () => _fillAccount(username, password),
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withOpacity(0.3)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold),
         ),
       ),
     );
