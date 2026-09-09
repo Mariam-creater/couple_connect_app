@@ -11,12 +11,14 @@ RUN apk add --no-cache \
     freetype-dev \
     oniguruma-dev \
     icu-dev \
-    mysql-client
+    mysql-client \
+    sqlite-dev
 
 # Install PHP extensions required by Laravel 12
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) \
         pdo_mysql \
+        pdo_sqlite \
         mbstring \
         exif \
         pcntl \
@@ -35,9 +37,11 @@ WORKDIR /var/www/html
 # Copy source code
 COPY . /var/www/html
 
-# Set directory permissions for Laravel
-RUN chown -R www-data:www-data /var/www/html \
-    && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
+# Create essential directories and set permissions for Laravel and SQLite
+RUN mkdir -p /var/www/html/database /var/www/html/storage/framework/sessions /var/www/html/storage/framework/views /var/www/html/storage/framework/cache /var/www/html/storage/logs \
+    && touch /var/www/html/database/database.sqlite \
+    && chown -R www-data:www-data /var/www/html \
+    && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache /var/www/html/database
 
 # Install production dependencies
 RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
