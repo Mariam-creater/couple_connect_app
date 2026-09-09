@@ -188,6 +188,64 @@ class ChatController extends Controller
     }
 
     /**
+     * Dedicated Real Voice Note Upload Endpoint
+     * Stores in S3/R2 cloud storage (or public disk fallback) for persistent playback across devices.
+     */
+    public function uploadVoice(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->couple_space_id) {
+            return response()->json(['status' => 'error', 'message' => 'No active couple space'], 404);
+        }
+
+        $file = $request->file('voice') ?? $request->file('file') ?? $request->file('audio');
+        if (!$file) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'The voice or audio file is required.',
+                'errors' => ['file' => ['Audio file is required.']]
+            ], 422);
+        }
+
+        $request->validate([
+            'file' => 'nullable|file|max:51200',
+            'voice' => 'nullable|file|max:51200',
+            'audio' => 'nullable|file|max:51200',
+            'duration_seconds' => 'nullable|numeric',
+        ]);
+
+        $ext = strtolower($file->getClientOriginalExtension());
+        if (empty($ext) || !in_array($ext, ['m4a', 'aac', 'wav', 'mp3', 'ogg', 'opus', 'caf'])) {
+            $ext = 'm4a';
+        }
+
+        $filename = 'voice_' . Str::uuid() . '.' . $ext;
+        $disk = config('filesystems.default') === 's3' ? 's3' : 'public';
+        $folder = 'chat_voices/' . $user->couple_space_id;
+        $path = $file->storeAs($folder, $filename, $disk);
+
+        $url = Storage::disk($disk)->url($path);
+        if (str_starts_with($url, '/')) {
+            $baseUrl = rtrim(config('app.url', 'http://localhost:8000'), '/');
+            $url = $baseUrl . $url;
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Voice note uploaded successfully',
+            'data' => [
+                'file_path' => $url,
+                'storage_path' => $path,
+                'disk' => $disk,
+                'file_name' => $file->getClientOriginalName() ?: $filename,
+                'mime_type' => $file->getClientMimeType() ?: 'audio/' . ($ext === 'm4a' ? 'mp4' : $ext),
+                'file_size_bytes' => $file->getSize(),
+                'duration_seconds' => (float) $request->input('duration_seconds', 0),
+            ]
+        ]);
+    }
+
+    /**
      * Upload an encrypted attachment (photo, voice note, document, video).
      */
     public function uploadAttachment(Request $request): JsonResponse
@@ -213,13 +271,21 @@ class ChatController extends Controller
         }
 
         $filename = Str::uuid() . '.' . $ext;
-        $path = $file->storeAs($folder, $filename, 'public');
+        $disk = config('filesystems.default') === 's3' ? 's3' : 'public';
+        $path = $file->storeAs($folder, $filename, $disk);
+
+        $url = Storage::disk($disk)->url($path);
+        if (str_starts_with($url, '/')) {
+            $baseUrl = rtrim(config('app.url', 'http://localhost:8000'), '/');
+            $url = $baseUrl . $url;
+        }
 
         return response()->json([
             'status' => 'success',
             'data' => [
-                'file_path' => Storage::url($path),
+                'file_path' => $url,
                 'storage_path' => $path,
+                'disk' => $disk,
                 'folder' => $folder,
                 'file_name' => $file->getClientOriginalName(),
                 'mime_type' => $mime,

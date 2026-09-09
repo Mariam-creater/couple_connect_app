@@ -68,7 +68,16 @@ class ChatService
             // Log activity for streak
             $this->streakService->recordActivity($sender, 'daily_chat');
 
-            return $message->load(['sender', 'reactions', 'attachments', 'replyTo']);
+            $loadedMessage = $message->load(['sender', 'reactions', 'attachments', 'replyTo']);
+
+            // Broadcast real-time event
+            try {
+                \App\Events\NewMessageEvent::dispatch($loadedMessage);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Broadcast failed: ' . $e->getMessage());
+            }
+
+            return $loadedMessage;
         });
     }
 
@@ -84,17 +93,29 @@ class ChatService
         if ($existing) {
             if ($existing->reaction === $reaction) {
                 $existing->delete();
+                try {
+                    \App\Events\MessageReactionEvent::dispatch($message->couple_space_id, $message->id, $user->id, $reaction, true);
+                } catch (\Throwable $e) {}
                 return $existing;
             }
             $existing->update(['reaction' => $reaction]);
+            try {
+                \App\Events\MessageReactionEvent::dispatch($message->couple_space_id, $message->id, $user->id, $reaction, false);
+            } catch (\Throwable $e) {}
             return $existing;
         }
 
-        return MessageReaction::create([
+        $created = MessageReaction::create([
             'message_id' => $message->id,
             'user_id' => $user->id,
             'reaction' => $reaction,
         ]);
+
+        try {
+            \App\Events\MessageReactionEvent::dispatch($message->couple_space_id, $message->id, $user->id, $reaction, false);
+        } catch (\Throwable $e) {}
+
+        return $created;
     }
 
     /**
@@ -102,13 +123,22 @@ class ChatService
      */
     public function markAsRead(CoupleSpace $space, User $reader): int
     {
-        return Message::where('couple_space_id', $space->id)
+        $now = now();
+        $updatedCount = Message::where('couple_space_id', $space->id)
             ->where('sender_id', '!=', $reader->id)
             ->whereNull('read_at')
             ->update([
                 'status' => 'read',
-                'read_at' => now(),
+                'read_at' => $now,
             ]);
+
+        if ($updatedCount > 0) {
+            try {
+                \App\Events\MessageReadEvent::dispatch($space->id, $reader->id, $now->toISOString());
+            } catch (\Throwable $e) {}
+        }
+
+        return $updatedCount;
     }
 
     /**

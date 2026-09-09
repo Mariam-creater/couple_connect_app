@@ -4,6 +4,7 @@ import '../../core/crypto/e2ee_engine.dart';
 import '../../core/network/api_client.dart';
 import '../../core/services/document_service.dart';
 import '../../core/services/google_auth_service.dart';
+import '../../core/services/websocket_service.dart';
 import '../../data/models/models.dart';
 
 class AppState extends ChangeNotifier {
@@ -451,12 +452,16 @@ class AppState extends ChangeNotifier {
     return res.isSuccess;
   }
 
-  // --- INITIAL DATA LOAD ---
+  // --- INITIAL DATA LOAD & REALTIME WEBSOCKETS ---
   Future<void> fetchInitialData() async {
     if (!isConnectedWithPartner) {
       await fetchCoupleRequests();
       return;
     }
+
+    // Connect & subscribe to real-time WebSockets
+    await initRealtimeWebSockets();
+
     await Future.wait([
       fetchMessages(),
       fetchPinnedMessages(),
@@ -465,6 +470,93 @@ class AppState extends ChangeNotifier {
       fetchVisionBoards(),
       fetchStreakStatus(),
     ]);
+  }
+
+  Future<void> initRealtimeWebSockets() async {
+    if (coupleSpace == null) return;
+
+    final ws = WebSocketService();
+    ws.onMessageReceived = (data) {
+      onRealtimeMessageReceived(data);
+    };
+    ws.onReactionReceived = (data) {
+      onRealtimeReactionReceived(data);
+    };
+    ws.onReadReceived = (data) {
+      onRealtimeReadReceived(data);
+    };
+
+    await ws.connect();
+    await ws.subscribeToCoupleSpace(coupleSpace!.id);
+  }
+
+  void onRealtimeMessageReceived(Map<String, dynamic> data) {
+    try {
+      final model = MessageModel.fromJson(data);
+      model.decryptedText = E2EEEngine.decryptText(
+        ciphertext: model.encryptedPayload,
+        iv: model.iv,
+        mac: model.mac ?? '',
+        sharedSecret: sharedSecret,
+      );
+
+      final index = messages.indexWhere((m) => m.id == model.id || (m.messageUuid.isNotEmpty && m.messageUuid == model.messageUuid));
+      if (index >= 0) {
+        messages[index] = model;
+      } else {
+        messages.insert(0, model);
+      }
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error processing real-time message: $e');
+    }
+  }
+
+  void onRealtimeReactionReceived(Map<String, dynamic> data) {
+    try {
+      final messageId = data['message_id'];
+      final userId = data['user_id'];
+      final reaction = data['reaction'];
+      final isRemoved = data['is_removed'] == true;
+
+      final index = messages.indexWhere((m) => m.id == messageId);
+      if (index >= 0) {
+        final message = messages[index];
+        final reactions = List<MessageReactionModel>.from(message.reactions);
+
+        if (isRemoved) {
+          reactions.removeWhere((r) => r.userId == userId && r.reaction == reaction);
+        } else {
+          reactions.removeWhere((r) => r.userId == userId);
+          reactions.add(MessageReactionModel(
+            id: 0,
+            userId: userId is num ? userId.toInt() : int.tryParse(userId.toString()) ?? 0,
+            reaction: reaction.toString(),
+          ));
+        }
+
+        messages[index] = message.copyWith(reactions: reactions);
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error processing real-time reaction: $e');
+    }
+  }
+
+  void onRealtimeReadReceived(Map<String, dynamic> data) {
+    try {
+      final readerId = data['reader_id'];
+      if (currentUser != null && readerId != currentUser!.id) {
+        for (int i = 0; i < messages.length; i++) {
+          if (messages[i].senderId == currentUser!.id) {
+            messages[i] = messages[i].copyWith(status: 'read');
+          }
+        }
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error processing real-time read: $e');
+    }
   }
 
   // --- CHAT & E2EE MESSAGES ---
@@ -568,8 +660,79 @@ class AppState extends ChangeNotifier {
     if (res.isSuccess && res.data != null) {
       final model = MessageModel.fromJson(res.data);
       model.decryptedText = plainText;
-      messages.insert(0, model);
+      final existingIdx = messages.indexWhere((m) => m.id == model.id);
+      if (existingIdx >= 0) {
+        messages[existingIdx] = model;
+      } else {
+        messages.insert(0, model);
+      }
       notifyListeners();
+    }
+  }
+
+  Future<bool> uploadVoiceNote({
+    required List<int> audioBytes,
+    required String filename,
+    double durationSeconds = 0.0,
+  }) async {
+    try {
+      final res = await ApiClient.uploadMultipart(
+        ApiConstants.chatVoice,
+        fileBytes: audioBytes,
+        filename: filename,
+        fields: {
+          'duration_seconds': durationSeconds.toString(),
+        },
+      );
+
+      if (!res.isSuccess || res.data == null) {
+        return false;
+      }
+
+      final data = Map<String, dynamic>.from(res.data['data'] ?? res.data);
+      final filePath = data['file_path'] ?? '';
+      final mimeType = data['mime_type'] ?? 'audio/mp4';
+      final sizeBytes = data['file_size_bytes'] ?? audioBytes.length;
+
+      final plainText = 'Voice message (${durationSeconds.toStringAsFixed(1)}s)';
+      final payload = E2EEEngine.encryptText(
+        plainText: plainText,
+        sharedSecret: sharedSecret,
+      );
+
+      final metadata = {
+        'file_path': filePath,
+        'file_name': filename,
+        'mime_type': mimeType,
+        'file_size_bytes': sizeBytes,
+        'duration_seconds': durationSeconds,
+        'duration_formatted': '${(durationSeconds / 60).floor()}:${(durationSeconds.toInt() % 60).toString().padLeft(2, '0')}',
+      };
+
+      final msgRes = await ApiClient.post(ApiConstants.chatMessages, {
+        'type': 'voice',
+        'encrypted_payload': payload.ciphertext,
+        'iv': payload.iv,
+        'mac': payload.mac,
+        'metadata': metadata,
+      });
+
+      if (msgRes.isSuccess && msgRes.data != null) {
+        final model = MessageModel.fromJson(msgRes.data);
+        model.decryptedText = plainText;
+        final existingIdx = messages.indexWhere((m) => m.id == model.id);
+        if (existingIdx >= 0) {
+          messages[existingIdx] = model;
+        } else {
+          messages.insert(0, model);
+        }
+        notifyListeners();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('Error uploading voice note: $e');
+      return false;
     }
   }
 

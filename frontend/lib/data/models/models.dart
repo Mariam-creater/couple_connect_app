@@ -255,6 +255,40 @@ class MessageModel {
       reactions: rawReactions.map((r) => MessageReactionModel.fromJson(Map<String, dynamic>.from(r))).toList(),
     );
   }
+
+  MessageModel copyWith({
+    int? id,
+    String? messageUuid,
+    int? senderId,
+    String? type,
+    String? encryptedPayload,
+    String? iv,
+    String? mac,
+    bool? isPinned,
+    bool? isEdited,
+    String? status,
+    DateTime? createdAt,
+    Map<String, dynamic>? metadata,
+    List<MessageReactionModel>? reactions,
+    String? decryptedText,
+  }) {
+    return MessageModel(
+      id: id ?? this.id,
+      messageUuid: messageUuid ?? this.messageUuid,
+      senderId: senderId ?? this.senderId,
+      type: type ?? this.type,
+      encryptedPayload: encryptedPayload ?? this.encryptedPayload,
+      iv: iv ?? this.iv,
+      mac: mac ?? this.mac,
+      isPinned: isPinned ?? this.isPinned,
+      isEdited: isEdited ?? this.isEdited,
+      status: status ?? this.status,
+      createdAt: createdAt ?? this.createdAt,
+      metadata: metadata ?? this.metadata,
+      reactions: reactions ?? this.reactions,
+      decryptedText: decryptedText ?? this.decryptedText,
+    );
+  }
 }
 
 class CalendarEventModel {

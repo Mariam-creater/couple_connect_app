@@ -79,7 +79,38 @@ Route::prefix('v1')->group(function () {
         Route::get('/chat/pinned', [ChatController::class, 'pinned']);
         Route::delete('/chat/messages/{id}', [ChatController::class, 'destroy']);
         Route::post('/chat/upload', [ChatController::class, 'uploadAttachment']);
+        Route::post('/chat/voice', [ChatController::class, 'uploadVoice']);
         Route::post('/chat/documents', [ChatController::class, 'uploadDocument']);
+
+        // Broadcasting Auth for Private Channels
+        Route::post('/broadcasting/auth', function (\Illuminate\Http\Request $request) {
+            $user = $request->user();
+            $channelName = $request->input('channel_name', '');
+            $socketId = $request->input('socket_id', '');
+
+            // Verify channel authorization
+            if (str_starts_with($channelName, 'private-couple.')) {
+                $spaceId = (int) str_replace('private-couple.', '', $channelName);
+                if ((int) $user->couple_space_id !== $spaceId) {
+                    return response()->json(['message' => 'Unauthorized to access this couple space channel'], 403);
+                }
+            }
+
+            try {
+                $auth = \Illuminate\Support\Facades\Broadcast::auth($request);
+                if ($auth) {
+                    return is_string($auth) ? response($auth, 200, ['Content-Type' => 'application/json']) : $auth;
+                }
+            } catch (\Throwable $e) {}
+
+            $appKey = config('broadcasting.connections.reverb.key') ?: env('REVERB_APP_KEY', 'couple_connect_key');
+            $secret = config('broadcasting.connections.reverb.secret') ?: env('REVERB_APP_SECRET', 'couple_connect_secret');
+            $signature = hash_hmac('sha256', "{$socketId}:{$channelName}", $secret);
+
+            return response()->json([
+                'auth' => "{$appKey}:{$signature}",
+            ]);
+        });
 
         // Feature 3: Love Calendar
         Route::get('/calendar/events', [CalendarController::class, 'index']);

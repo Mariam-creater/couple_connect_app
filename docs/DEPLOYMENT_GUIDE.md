@@ -1,110 +1,144 @@
-# COUPLE CONNECT – Production Deployment & DevOps Guide
+# Couple Connect: Railway Production Deployment Guide
 
-This guide covers deploying the **Laravel 12 API backend**, **MySQL**, **Redis**, **WebSocket Reverb Engine**, and the **Flutter cross-platform client (Web, iOS, Android)**.
-
----
-
-## 1. Backend Server Deployment (Docker Compose)
-
-### Prerequisites
-- Ubuntu 22.04 LTS / Debian 12
-- Docker Engine 24.0+ & Docker Compose v2+
-- Domain name with DNS A records pointing to server IP (e.g. `api.coupleconnect.app`)
-
-### Step-by-Step Setup
-
-1. **Clone repository on production server:**
-   ```bash
-   git clone https://github.com/your-org/couple_connect.git /var/www/couple_connect
-   cd /var/www/couple_connect/backend
-   ```
-
-2. **Configure Environment Variables (`.env`):**
-   ```ini
-   APP_NAME="Couple Connect"
-   APP_ENV=production
-   APP_KEY=base64:YOUR_GENERATED_APP_KEY
-   APP_DEBUG=false
-   APP_URL=https://api.coupleconnect.app
-
-   DB_CONNECTION=mysql
-   DB_HOST=mysql
-   DB_PORT=3306
-   DB_DATABASE=couple_connect
-   DB_USERNAME=couple_user
-   DB_PASSWORD=YOUR_STRONG_DATABASE_PASSWORD
-
-   REDIS_HOST=redis
-   REDIS_PASSWORD=YOUR_STRONG_REDIS_PASSWORD
-   REDIS_PORT=6379
-
-   BROADCAST_CONNECTION=reverb
-   REVERB_APP_ID=couple_connect_app
-   REVERB_APP_KEY=couple_connect_key
-   REVERB_APP_SECRET=couple_connect_secret
-   REVERB_HOST="0.0.0.0"
-   REVERB_PORT=8080
-   REVERB_SCHEME=https
-
-   GEMINI_API_KEY=YOUR_GOOGLE_GEMINI_API_KEY
-   ```
-
-3. **Launch Docker Services:**
-   ```bash
-   docker compose up -d --build
-   ```
-
-4. **Run Database Migrations & Initial Seeders:**
-   ```bash
-   docker compose exec app php artisan migrate --force
-   docker compose exec app php artisan db:seed --class=CoupleConnectSeeder --force
-   ```
-
-5. **Setup Storage Symlink & Cache Optimization:**
-   ```bash
-   docker compose exec app php artisan storage:link
-   docker compose exec app php artisan config:cache
-   docker compose exec app php artisan route:cache
-   docker compose exec app php artisan view:cache
-   ```
+This guide walks you through deploying the **Couple Connect Laravel 12 Backend**, **Laravel Reverb WebSockets**, **Persistent S3/R2 Cloud Storage**, and connecting **Physical Android/iOS Flutter Devices**.
 
 ---
 
-## 2. Flutter Client Builds
+## 1. Architecture Overview
 
-### Web Application (PWA / Responsive SPA)
-```bash
-cd /var/www/couple_connect/frontend
-flutter build web --release --pwa-strategy=offline-first
-# Output directory: build/web
 ```
-
-### Android APK & App Bundle (Google Play Store)
-```bash
-flutter build appbundle --release
-# Output: build/app/outputs/bundle/release/app-release.aab
-```
-
-### iOS (Apple App Store)
-```bash
-flutter build ipa --release
-# Output: build/ios/archive/Runner.xcarchive
+                      ┌─────────────────────────────────┐
+                      │   Flutter Mobile/Web Clients    │
+                      │  (Device A  ◄═══►  Device B)    │
+                      └───────┬─────────────────▲───────┘
+                              │ HTTPS           │ WSS (Port 443)
+                              ▼                 │
+     ┌──────────────────────────────────────────┴─────────────────────────┐
+     │                      Railway.app Production                        │
+     │                                                                    │
+     │  ┌─────────────────────────┐         ┌──────────────────────────┐  │
+     │  │  Laravel REST API       │         │  Laravel Reverb Daemon   │  │
+     │  │  - Auth / E2EE / Chat   │────────►│  - Real-Time WebSockets  │  │
+     │  │  - Document / Voice API │ Events  │  - Private Channels      │  │
+     │  └───────────┬─────────────┘         └──────────────────────────┘  │
+     │              │                                                     │
+     │              │ MySQL TCP                                           │
+     │              ▼                                                     │
+     │  ┌─────────────────────────┐                                       │
+     │  │  Railway MySQL Database │                                       │
+     │  └─────────────────────────┘                                       │
+     └──────────────────────┬─────────────────────────────────────────────┘
+                            │
+                            ▼
+     ┌────────────────────────────────────────────────────────────────────┐
+     │         Cloudflare R2 / AWS S3 Persistent Storage                  │
+     │  - Encrypted Voice Notes (.m4a/.aac/.wav)                          │
+     │  - Real PDF/DOCX/Images                                            │
+     │  - High-Speed Worldwide Direct Streaming / CDN                     │
+     └────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 3. SSL / HTTPS Setup with Certbot
+## 2. Deploying Backend to Railway.app
 
-```bash
-sudo apt install certbot python3-certbot-nginx
-sudo certbot --nginx -d api.coupleconnect.app -d app.coupleconnect.app
+### Step A: Create Project on Railway
+1. Open [railway.com](https://railway.com) and log in.
+2. Click **+ New Project** -> **Deploy from GitHub repo**.
+3. Select `couple_connect_app` (or your repository) and choose the `backend` folder as the Root Directory.
+
+### Step B: Add MySQL Database Plugin
+1. In your Railway project canvas, click **+ New** -> **Database** -> **Add MySQL**.
+2. Railway will automatically create the database and inject variables (`MYSQLHOST`, `MYSQLPORT`, `MYSQLUSER`, `MYSQLPASSWORD`, `MYSQLDATABASE`).
+
+### Step C: Configure Environment Variables
+Add the following variables in the **Variables** tab of your Railway backend service:
+
+```ini
+APP_NAME="Couple Connect"
+APP_ENV=production
+APP_KEY=base64:... # Generate via `php artisan key:generate --show`
+APP_DEBUG=false
+APP_URL=https://${{RAILWAY_PUBLIC_DOMAIN}}
+
+# Database (Automatically mapped from MySQL plugin)
+DB_CONNECTION=mysql
+DB_HOST=${{MYSQLHOST}}
+DB_PORT=${{MYSQLPORT}}
+DB_DATABASE=${{MYSQLDATABASE}}
+DB_USERNAME=${{MYSQLUSER}}
+DB_PASSWORD=${{MYSQLPASSWORD}}
+
+# Queue, Cache, Broadcast
+BROADCAST_CONNECTION=reverb
+FILESYSTEM_DISK=s3
+QUEUE_CONNECTION=database
+CACHE_STORE=database
+
+# Reverb WebSockets
+REVERB_APP_ID=couple_connect_app
+REVERB_APP_KEY=couple_connect_key
+REVERB_APP_SECRET=your_production_secure_secret_here
+REVERB_HOST=${{RAILWAY_PUBLIC_DOMAIN}}
+REVERB_PORT=443
+REVERB_SCHEME=https
+REVERB_SERVER_HOST=0.0.0.0
+REVERB_SERVER_PORT=8080
+
+# Cloud Media Storage (Cloudflare R2 or AWS S3)
+AWS_ACCESS_KEY_ID=YOUR_R2_OR_S3_ACCESS_KEY
+AWS_SECRET_ACCESS_KEY=YOUR_R2_OR_S3_SECRET_KEY
+AWS_DEFAULT_REGION=auto
+AWS_BUCKET=couple-connect-media
+AWS_USE_PATH_STYLE_ENDPOINT=true
+AWS_ENDPOINT=https://<YOUR_ACCOUNT_ID>.r2.cloudflarestorage.com
+AWS_URL=https://media.yourdomain.com
 ```
 
 ---
 
-## 4. Cron Jobs & Queue Workers
+## 3. Persistent Media Storage Setup (Cloudflare R2)
 
-Add to crontab (`crontab -e`):
-```cron
-* * * * * cd /var/www/couple_connect/backend && docker compose exec -T app php artisan schedule:run >> /dev/null 2>&1
+Railway containers have ephemeral filesystems (files uploaded to local disk disappear on container redeploy). Cloudflare R2 provides zero-egress fee, persistent, lightning-fast media storage.
+
+1. Create a Cloudflare account and go to **R2 Object Storage**.
+2. Click **Create Bucket** -> Name it `couple-connect-media`.
+3. In **R2 Manage API Tokens**, create a token with **Object Read & Write** permissions.
+4. Copy the **Access Key ID**, **Secret Access Key**, and **Endpoint URL** into your Railway variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ENDPOINT`).
+5. (Optional) Connect a Custom Domain or enable R2 Public Access to allow instant audio/document streaming worldwide.
+
+---
+
+## 4. Connecting Flutter Mobile Devices (Android / iOS)
+
+In the Flutter application, update [`ApiConstants`](file:///Applications/XAMPP/xamppfiles/htdocs/laravel/couple_connect/frontend/lib/core/constants/api_constants.dart) with your Railway URL:
+
+```dart
+class ApiConstants {
+  // Replace with your Railway public domain:
+  static const String baseUrl = 'https://couple-connect-production.up.railway.app/api/v1';
+}
 ```
+
+### Building the Mobile APK / iOS App
+```bash
+# Build Android APK for physical device
+flutter build apk --release
+
+# Run directly on plugged-in Android device
+flutter run -d <device_id> --release
+```
+
+---
+
+## 5. Verifying Real-Time WebSockets & Voice Streaming
+
+1. **User A** records a voice message and presses send:
+   - Voice note is recorded in AAC/M4A format.
+   - Flutter uploads file to `POST /api/v1/chat/voice`.
+   - Laravel uploads file to S3/R2 and saves record in MySQL.
+   - Laravel triggers `NewMessageEvent` implementing `ShouldBroadcastNow` on `private-couple.{id}`.
+2. **User B** (on physical device in another city/network):
+   - Receives `message.new` event via WebSocket connection over WSS (Port 443).
+   - Chat screen inserts message immediately without pulling or reloading.
+   - Taps play: streams audio instantly from Cloudflare R2 / S3 CDN.

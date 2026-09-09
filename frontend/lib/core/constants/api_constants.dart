@@ -17,6 +17,7 @@ class ApiConstants {
   static const String security = '$baseUrl/auth/security';
   static const String deleteAccount = '$baseUrl/auth/account';
   static const String logout = '$baseUrl/auth/logout';
+  static const String broadcastAuth = '$baseUrl/broadcasting/auth';
 
   // Couple Connection
   static const String coupleSearch = '$baseUrl/couple/search';
@@ -32,6 +33,7 @@ class ApiConstants {
   static const String chatPinned = '$baseUrl/chat/pinned';
   static const String chatRead = '$baseUrl/chat/messages/read';
   static const String chatUpload = '$baseUrl/chat/upload';
+  static const String chatVoice = '$baseUrl/chat/voice';
   static const String chatDocuments = '$baseUrl/chat/documents';
 
   // Calendar
