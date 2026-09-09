@@ -13,7 +13,11 @@ class AppState extends ChangeNotifier {
   bool isLoading = false;
   String? errorMessage;
 
+  List<CoupleRequestModel> incomingRequests = [];
+  List<CoupleRequestModel> outgoingRequests = [];
+
   List<MessageModel> messages = [];
+  List<MessageModel> pinnedMessages = [];
   List<CalendarEventModel> calendarEvents = [];
   List<MemoryModel> memories = [];
   List<VisionBoardModel> visionBoards = [];
@@ -65,7 +69,40 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<bool> register(String name, String username, String email, String password) async {
+  Future<bool> socialLogin({required String provider, required String token, String? name, String? email}) async {
+    isLoading = true;
+    errorMessage = null;
+    notifyListeners();
+
+    final res = await ApiClient.post(ApiConstants.socialLogin, {
+      'provider': provider,
+      'token': token,
+      'name': name ?? (provider == 'google' ? 'Google User' : 'Apple User'),
+      'email': email ?? (provider == 'google' ? 'googleuser@coupleconnect.app' : 'appleuser@coupleconnect.app'),
+    });
+
+    isLoading = false;
+    if (res.isSuccess && res.data != null) {
+      final authToken = res.data['token'];
+      await ApiClient.setAuthToken(authToken);
+      currentUser = UserModel.fromJson(res.data['user']);
+      if (res.data['partner'] != null) {
+        partner = UserModel.fromJson(res.data['partner']);
+      }
+      if (res.data['user']['couple_space'] != null) {
+        coupleSpace = CoupleSpaceModel.fromJson(res.data['user']['couple_space']);
+      }
+      notifyListeners();
+      await fetchInitialData();
+      return true;
+    } else {
+      errorMessage = res.message;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> register(String name, String username, String email, String password, {String? bio, String? gender, String? birthday}) async {
     isLoading = true;
     errorMessage = null;
     notifyListeners();
@@ -75,6 +112,9 @@ class AppState extends ChangeNotifier {
       'username': username,
       'email': email,
       'password': password,
+      'bio': bio,
+      'gender': gender,
+      'birthday': birthday,
     });
 
     isLoading = false;
@@ -91,18 +131,96 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  Future<bool> forgotPassword(String email) async {
+    isLoading = true;
+    errorMessage = null;
+    notifyListeners();
+
+    final res = await ApiClient.post(ApiConstants.forgotPassword, {'email': email});
+    isLoading = false;
+    notifyListeners();
+    return res.isSuccess;
+  }
+
+  Future<bool> resetPassword({required String email, required String token, required String password}) async {
+    isLoading = true;
+    errorMessage = null;
+    notifyListeners();
+
+    final res = await ApiClient.post(ApiConstants.resetPassword, {
+      'email': email,
+      'token': token,
+      'password': password,
+    });
+    isLoading = false;
+    notifyListeners();
+    return res.isSuccess;
+  }
+
   Future<void> fetchProfile() async {
     final res = await ApiClient.get(ApiConstants.me);
     if (res.isSuccess && res.data != null) {
       currentUser = UserModel.fromJson(res.data['user']);
       if (res.data['partner'] != null) {
         partner = UserModel.fromJson(res.data['partner']);
+      } else {
+        partner = null;
       }
       if (res.data['user']['couple_space'] != null) {
         coupleSpace = CoupleSpaceModel.fromJson(res.data['user']['couple_space']);
+      } else {
+        coupleSpace = null;
       }
       notifyListeners();
     }
+  }
+
+  Future<bool> updateProfile({String? name, String? bio, String? gender, String? birthday, String? phone, String? avatarUrl}) async {
+    isLoading = true;
+    notifyListeners();
+
+    final res = await ApiClient.put(ApiConstants.profile, {
+      if (name != null) 'name': name,
+      if (bio != null) 'bio': bio,
+      if (gender != null) 'gender': gender,
+      if (birthday != null) 'birthday': birthday,
+      if (phone != null) 'phone': phone,
+      if (avatarUrl != null) 'avatar_url': avatarUrl,
+    });
+
+    isLoading = false;
+    if (res.isSuccess && res.data != null) {
+      currentUser = UserModel.fromJson(res.data['user'] ?? res.data);
+      notifyListeners();
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> updatePrivacy({bool? showOnlineStatus, bool? showReadReceipts}) async {
+    final res = await ApiClient.put(ApiConstants.privacy, {
+      if (showOnlineStatus != null) 'privacy_show_online_status': showOnlineStatus,
+      if (showReadReceipts != null) 'privacy_show_read_receipts': showReadReceipts,
+    });
+    if (res.isSuccess && res.data != null) {
+      currentUser = UserModel.fromJson(res.data['user'] ?? res.data);
+      notifyListeners();
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> deleteAccount(String password) async {
+    isLoading = true;
+    notifyListeners();
+
+    final res = await ApiClient.delete(ApiConstants.deleteAccount, data: {'password': password});
+    isLoading = false;
+    if (res.isSuccess) {
+      await logout();
+      return true;
+    }
+    return false;
   }
 
   Future<void> logout() async {
@@ -112,13 +230,16 @@ class AppState extends ChangeNotifier {
     partner = null;
     coupleSpace = null;
     messages = [];
+    pinnedMessages = [];
     calendarEvents = [];
     memories = [];
     visionBoards = [];
+    incomingRequests = [];
+    outgoingRequests = [];
     notifyListeners();
   }
 
-  // --- COUPLE CONNECTION HANDSHAKE ---
+  // --- COUPLE CONNECTION & REQUESTS ---
   Future<UserModel?> searchPartner(String query) async {
     final res = await ApiClient.get('${ApiConstants.coupleSearch}?query=$query');
     if (res.isSuccess && res.data != null) {
@@ -127,17 +248,33 @@ class AppState extends ChangeNotifier {
     return null;
   }
 
+  Future<void> fetchCoupleRequests() async {
+    final res = await ApiClient.get(ApiConstants.coupleRequests);
+    if (res.isSuccess && res.data != null) {
+      final inList = (res.data['incoming'] as List? ?? []);
+      final outList = (res.data['outgoing'] as List? ?? []);
+      incomingRequests = inList.map((r) => CoupleRequestModel.fromJson(r)).toList();
+      outgoingRequests = outList.map((r) => CoupleRequestModel.fromJson(r)).toList();
+      notifyListeners();
+    }
+  }
+
   Future<bool> sendCoupleRequest(int receiverId) async {
     final res = await ApiClient.post(ApiConstants.coupleRequest, {'receiver_id': receiverId});
     if (res.isSuccess) {
-      currentUser = UserModel(
-        id: currentUser!.id,
-        name: currentUser!.name,
-        username: currentUser!.username,
-        email: currentUser!.email,
-        coupleId: currentUser!.coupleId,
-        relationshipStatus: 'pending',
-      );
+      currentUser = currentUser?.copyWith(relationshipStatus: 'pending');
+      await fetchCoupleRequests();
+      notifyListeners();
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> cancelCoupleRequest(int requestId) async {
+    final res = await ApiClient.post('${ApiConstants.baseUrl}/couple/request/$requestId/cancel', {});
+    if (res.isSuccess) {
+      currentUser = currentUser?.copyWith(relationshipStatus: 'single');
+      await fetchCoupleRequests();
       notifyListeners();
       return true;
     }
@@ -155,11 +292,54 @@ class AppState extends ChangeNotifier {
     return false;
   }
 
+  Future<bool> rejectCoupleRequest(int requestId) async {
+    final res = await ApiClient.post('${ApiConstants.baseUrl}/couple/request/$requestId/reject', {});
+    if (res.isSuccess) {
+      await fetchCoupleRequests();
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> removePartner() async {
+    final res = await ApiClient.post(ApiConstants.coupleRemovePartner, {});
+    if (res.isSuccess) {
+      coupleSpace = null;
+      partner = null;
+      currentUser = currentUser?.copyWith(relationshipStatus: 'single');
+      messages = [];
+      notifyListeners();
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> blockUser(int userId, {String? reason}) async {
+    final res = await ApiClient.post(ApiConstants.coupleBlock, {
+      'blocked_user_id': userId,
+      'reason': reason ?? 'User blocked by partner',
+    });
+    return res.isSuccess;
+  }
+
+  Future<bool> reportUser(int userId, {required String reason, required String category}) async {
+    final res = await ApiClient.post(ApiConstants.coupleReport, {
+      'reported_user_id': userId,
+      'reason': reason,
+      'category': category,
+    });
+    return res.isSuccess;
+  }
+
   // --- INITIAL DATA LOAD ---
   Future<void> fetchInitialData() async {
-    if (!isConnectedWithPartner) return;
+    if (!isConnectedWithPartner) {
+      await fetchCoupleRequests();
+      return;
+    }
     await Future.wait([
       fetchMessages(),
+      fetchPinnedMessages(),
       fetchCalendarEvents(),
       fetchMemories(),
       fetchVisionBoards(),
@@ -186,17 +366,36 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<void> sendTextMessage(String plainText) async {
+  Future<void> fetchPinnedMessages() async {
+    final res = await ApiClient.get(ApiConstants.chatPinned);
+    if (res.isSuccess && res.data != null) {
+      final rawList = res.data as List;
+      pinnedMessages = rawList.map((m) {
+        final model = MessageModel.fromJson(m);
+        model.decryptedText = E2EEEngine.decryptText(
+          ciphertext: model.encryptedPayload,
+          iv: model.iv,
+          mac: model.mac ?? '',
+          sharedSecret: sharedSecret,
+        );
+        return model;
+      }).toList();
+      notifyListeners();
+    }
+  }
+
+  Future<void> sendTextMessage(String plainText, {String type = 'text', Map<String, dynamic>? metadata}) async {
     final payload = E2EEEngine.encryptText(
       plainText: plainText,
       sharedSecret: sharedSecret,
     );
 
     final res = await ApiClient.post(ApiConstants.chatMessages, {
-      'type': 'text',
+      'type': type,
       'encrypted_payload': payload.ciphertext,
       'iv': payload.iv,
       'mac': payload.mac,
+      if (metadata != null) 'metadata': metadata,
     });
 
     if (res.isSuccess && res.data != null) {
@@ -207,9 +406,57 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  Future<bool> editMessage(int messageId, String newPlainText) async {
+    final payload = E2EEEngine.encryptText(
+      plainText: newPlainText,
+      sharedSecret: sharedSecret,
+    );
+
+    final res = await ApiClient.put('${ApiConstants.chatMessages}/$messageId', {
+      'encrypted_payload': payload.ciphertext,
+      'iv': payload.iv,
+      'mac': payload.mac,
+    });
+
+    if (res.isSuccess) {
+      final index = messages.indexWhere((m) => m.id == messageId);
+      if (index != -1) {
+        messages[index].decryptedText = newPlainText;
+        notifyListeners();
+      }
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> deleteMessage(int messageId) async {
+    final res = await ApiClient.delete('${ApiConstants.chatMessages}/$messageId');
+    if (res.isSuccess) {
+      messages.removeWhere((m) => m.id == messageId);
+      pinnedMessages.removeWhere((m) => m.id == messageId);
+      notifyListeners();
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> togglePinMessage(int messageId) async {
+    final res = await ApiClient.post('${ApiConstants.chatMessages}/$messageId/pin', {});
+    if (res.isSuccess) {
+      await fetchMessages();
+      await fetchPinnedMessages();
+      return true;
+    }
+    return false;
+  }
+
   Future<void> reactToMessage(int messageId, String emoji) async {
     await ApiClient.post('${ApiConstants.chatMessages}/$messageId/react', {'reaction': emoji});
     await fetchMessages();
+  }
+
+  Future<void> markMessagesAsRead() async {
+    await ApiClient.post(ApiConstants.chatRead, {});
   }
 
   // --- CALENDAR ---

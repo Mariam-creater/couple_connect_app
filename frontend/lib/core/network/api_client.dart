@@ -77,9 +77,13 @@ class ApiClient {
     }
   }
 
-  static Future<ApiResponse<dynamic>> delete(String url) async {
+  static Future<ApiResponse<dynamic>> delete(String url, {Map<String, dynamic>? data}) async {
     try {
-      final res = await http.delete(Uri.parse(url), headers: _headers);
+      final res = await http.delete(
+        Uri.parse(url),
+        headers: _headers,
+        body: data != null ? jsonEncode(data) : null,
+      );
       return _parseResponse(res);
     } catch (e) {
       return ApiResponse(isSuccess: false, message: e.toString(), statusCode: 500);

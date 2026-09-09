@@ -19,6 +19,10 @@ class User extends Authenticatable
         'email',
         'password',
         'avatar_url',
+        'bio',
+        'gender',
+        'birthday',
+        'phone',
         'couple_id',
         'relationship_status',
         'couple_space_id',
@@ -27,6 +31,10 @@ class User extends Authenticatable
         'biometric_enabled',
         'pin_code_hash',
         'online_status',
+        'privacy_show_online_status',
+        'privacy_show_read_receipts',
+        'social_provider',
+        'social_id',
         'last_seen_at',
         'fcm_token',
     ];
@@ -42,7 +50,10 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'birthday' => 'date',
             'biometric_enabled' => 'boolean',
+            'privacy_show_online_status' => 'boolean',
+            'privacy_show_read_receipts' => 'boolean',
             'last_seen_at' => 'datetime',
         ];
     }

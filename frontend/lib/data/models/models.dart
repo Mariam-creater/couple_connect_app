@@ -10,6 +10,12 @@ class UserModel {
   final String? publicKey;
   final bool biometricEnabled;
   final String onlineStatus;
+  final String? bio;
+  final String? gender;
+  final String? birthday;
+  final String? phone;
+  final bool privacyShowOnlineStatus;
+  final bool privacyShowReadReceipts;
 
   UserModel({
     required this.id,
@@ -23,6 +29,12 @@ class UserModel {
     this.publicKey,
     this.biometricEnabled = false,
     this.onlineStatus = 'offline',
+    this.bio,
+    this.gender,
+    this.birthday,
+    this.phone,
+    this.privacyShowOnlineStatus = true,
+    this.privacyShowReadReceipts = true,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -38,6 +50,76 @@ class UserModel {
       publicKey: json['public_key'],
       biometricEnabled: json['biometric_enabled'] ?? false,
       onlineStatus: json['online_status'] ?? 'offline',
+      bio: json['bio'],
+      gender: json['gender'],
+      birthday: json['birthday'],
+      phone: json['phone'],
+      privacyShowOnlineStatus: json['privacy_show_online_status'] ?? true,
+      privacyShowReadReceipts: json['privacy_show_read_receipts'] ?? true,
+    );
+  }
+
+  UserModel copyWith({
+    String? name,
+    String? bio,
+    String? gender,
+    String? birthday,
+    String? phone,
+    String? avatarUrl,
+    bool? privacyShowOnlineStatus,
+    bool? privacyShowReadReceipts,
+    String? relationshipStatus,
+  }) {
+    return UserModel(
+      id: id,
+      name: name ?? this.name,
+      username: username,
+      email: email,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
+      coupleId: coupleId,
+      relationshipStatus: relationshipStatus ?? this.relationshipStatus,
+      coupleSpaceId: coupleSpaceId,
+      publicKey: publicKey,
+      biometricEnabled: biometricEnabled,
+      onlineStatus: onlineStatus,
+      bio: bio ?? this.bio,
+      gender: gender ?? this.gender,
+      birthday: birthday ?? this.birthday,
+      phone: phone ?? this.phone,
+      privacyShowOnlineStatus: privacyShowOnlineStatus ?? this.privacyShowOnlineStatus,
+      privacyShowReadReceipts: privacyShowReadReceipts ?? this.privacyShowReadReceipts,
+    );
+  }
+}
+
+class CoupleRequestModel {
+  final int id;
+  final int senderId;
+  final int receiverId;
+  final String status;
+  final DateTime createdAt;
+  final UserModel? sender;
+  final UserModel? receiver;
+
+  CoupleRequestModel({
+    required this.id,
+    required this.senderId,
+    required this.receiverId,
+    required this.status,
+    required this.createdAt,
+    this.sender,
+    this.receiver,
+  });
+
+  factory CoupleRequestModel.fromJson(Map<String, dynamic> json) {
+    return CoupleRequestModel(
+      id: json['id'] ?? 0,
+      senderId: json['sender_id'] ?? 0,
+      receiverId: json['receiver_id'] ?? 0,
+      status: json['status'] ?? 'pending',
+      createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
+      sender: json['sender'] != null ? UserModel.fromJson(json['sender']) : null,
+      receiver: json['receiver'] != null ? UserModel.fromJson(json['receiver']) : null,
     );
   }
 }

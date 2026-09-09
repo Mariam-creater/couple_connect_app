@@ -33,30 +33,42 @@ Route::prefix('v1')->group(function () {
     // Public Authentication Endpoints
     Route::post('/auth/register', [AuthController::class, 'register']);
     Route::post('/auth/login', [AuthController::class, 'login']);
+    Route::post('/auth/social-login', [AuthController::class, 'socialLogin']);
+    Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword']);
+    Route::post('/auth/reset-password', [AuthController::class, 'resetPassword']);
 
     // Protected Authenticated Endpoints (Sanctum)
     Route::middleware('auth:sanctum')->group(function () {
 
         // User Profile & Security
         Route::get('/auth/me', [AuthController::class, 'me']);
+        Route::put('/auth/profile', [AuthController::class, 'updateProfile']);
+        Route::put('/auth/privacy', [AuthController::class, 'updatePrivacySettings']);
         Route::post('/auth/security', [AuthController::class, 'updateSecurity']);
+        Route::delete('/auth/account', [AuthController::class, 'deleteAccount']);
         Route::post('/auth/logout', [AuthController::class, 'logout']);
 
         // Feature 1: Couple Connection
         Route::get('/couple/search', [CoupleController::class, 'search']);
         Route::post('/couple/request', [CoupleController::class, 'sendRequest']);
+        Route::post('/couple/request/{id}/cancel', [CoupleController::class, 'cancelRequest']);
         Route::get('/couple/requests', [CoupleController::class, 'requests']);
         Route::post('/couple/request/{id}/accept', [CoupleController::class, 'acceptRequest']);
         Route::post('/couple/request/{id}/decline', [CoupleController::class, 'declineRequest']);
+        Route::post('/couple/remove-partner', [CoupleController::class, 'removePartner']);
+        Route::post('/couple/block', [CoupleController::class, 'blockUser']);
+        Route::post('/couple/report', [CoupleController::class, 'reportUser']);
         Route::get('/couple/space', [CoupleController::class, 'space']);
         Route::put('/couple/space', [CoupleController::class, 'updateSpace']);
 
         // Feature 2: Real-Time Chat & E2EE Messages
         Route::get('/chat/messages', [ChatController::class, 'index']);
         Route::post('/chat/messages', [ChatController::class, 'store']);
+        Route::put('/chat/messages/{id}', [ChatController::class, 'edit']);
         Route::post('/chat/messages/{id}/react', [ChatController::class, 'react']);
         Route::post('/chat/messages/read', [ChatController::class, 'markRead']);
         Route::post('/chat/messages/{id}/pin', [ChatController::class, 'togglePin']);
+        Route::get('/chat/pinned', [ChatController::class, 'pinned']);
         Route::delete('/chat/messages/{id}', [ChatController::class, 'destroy']);
         Route::post('/chat/upload', [ChatController::class, 'uploadAttachment']);
 

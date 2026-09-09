@@ -4,9 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\CoupleRequest;
 use App\Models\CoupleSpace;
+use App\Models\ReportAndBlock;
+use App\Models\User;
 use App\Services\CoupleManagerService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class CoupleController extends Controller
 {
@@ -63,6 +66,26 @@ class CoupleController extends Controller
     }
 
     /**
+     * Cancel an outgoing pending request.
+     */
+    public function cancelRequest(Request $request, int $id): JsonResponse
+    {
+        $coupleRequest = CoupleRequest::where('id', $id)
+            ->where('sender_id', $request->user()->id)
+            ->where('status', 'pending')
+            ->firstOrFail();
+
+        $coupleRequest->delete();
+
+        $request->user()->update(['relationship_status' => 'single']);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Couple request cancelled.'
+        ]);
+    }
+
+    /**
      * Get pending incoming and outgoing requests.
      */
     public function requests(Request $request): JsonResponse
@@ -71,12 +94,12 @@ class CoupleController extends Controller
 
         $incoming = CoupleRequest::where('receiver_id', $user->id)
             ->where('status', 'pending')
-            ->with('sender:id,name,username,avatar_url,couple_id,public_key')
+            ->with('sender:id,name,username,avatar_url,couple_id,public_key,bio')
             ->get();
 
         $outgoing = CoupleRequest::where('sender_id', $user->id)
             ->where('status', 'pending')
-            ->with('receiver:id,name,username,avatar_url,couple_id')
+            ->with('receiver:id,name,username,avatar_url,couple_id,bio')
             ->get();
 
         return response()->json([
@@ -125,6 +148,91 @@ class CoupleController extends Controller
                 'message' => $e->getMessage()
             ], 422);
         }
+    }
+
+    /**
+     * Remove / Disconnect from current partner.
+     */
+    public function removePartner(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->couple_space_id) {
+            return response()->json(['status' => 'error', 'message' => 'No active couple space'], 404);
+        }
+
+        DB::transaction(function () use ($user) {
+            $space = CoupleSpace::findOrFail($user->couple_space_id);
+            $partner = $space->getPartnerOf($user->id);
+
+            $user->update([
+                'relationship_status' => 'single',
+                'couple_space_id' => null,
+            ]);
+
+            if ($partner) {
+                $partner->update([
+                    'relationship_status' => 'single',
+                    'couple_space_id' => null,
+                ]);
+            }
+
+            $space->delete();
+        });
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Disconnected from partner. Status set to single.'
+        ]);
+    }
+
+    /**
+     * Block a user.
+     */
+    public function blockUser(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'user_id' => 'required|exists:users,id',
+            'reason' => 'nullable|string',
+        ]);
+
+        ReportAndBlock::create([
+            'reporter_id' => $request->user()->id,
+            'reported_user_id' => $validated['user_id'],
+            'action_type' => 'block',
+            'reason' => $validated['reason'] ?? 'User blocked',
+            'status' => 'action_taken',
+        ]);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'User blocked.'
+        ]);
+    }
+
+    /**
+     * Report a user.
+     */
+    public function reportUser(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'user_id' => 'required|exists:users,id',
+            'reason' => 'required|string|max:255',
+            'details' => 'nullable|string|max:1000',
+        ]);
+
+        ReportAndBlock::create([
+            'reporter_id' => $request->user()->id,
+            'reported_user_id' => $validated['user_id'],
+            'action_type' => 'report',
+            'reason' => $validated['reason'],
+            'details' => $validated['details'] ?? null,
+            'status' => 'pending',
+        ]);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Report submitted for review.'
+        ]);
     }
 
     /**

@@ -2,21 +2,31 @@ class ApiConstants {
   static const String baseUrl = 'http://localhost:8000/api/v1';
   static const String wsUrl = 'ws://localhost:8080/app/couple_connect_key';
 
-  // Auth
+  // Auth & Profile
   static const String register = '$baseUrl/auth/register';
   static const String login = '$baseUrl/auth/login';
+  static const String socialLogin = '$baseUrl/auth/social-login';
+  static const String forgotPassword = '$baseUrl/auth/forgot-password';
+  static const String resetPassword = '$baseUrl/auth/reset-password';
   static const String me = '$baseUrl/auth/me';
+  static const String profile = '$baseUrl/auth/profile';
+  static const String privacy = '$baseUrl/auth/privacy';
   static const String security = '$baseUrl/auth/security';
+  static const String deleteAccount = '$baseUrl/auth/account';
   static const String logout = '$baseUrl/auth/logout';
 
-  // Couple
+  // Couple Connection
   static const String coupleSearch = '$baseUrl/couple/search';
   static const String coupleRequest = '$baseUrl/couple/request';
   static const String coupleRequests = '$baseUrl/couple/requests';
+  static const String coupleRemovePartner = '$baseUrl/couple/remove-partner';
+  static const String coupleBlock = '$baseUrl/couple/block';
+  static const String coupleReport = '$baseUrl/couple/report';
   static const String coupleSpace = '$baseUrl/couple/space';
 
   // Chat
   static const String chatMessages = '$baseUrl/chat/messages';
+  static const String chatPinned = '$baseUrl/chat/pinned';
   static const String chatRead = '$baseUrl/chat/messages/read';
   static const String chatUpload = '$baseUrl/chat/upload';
 

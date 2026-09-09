@@ -67,6 +67,36 @@ class ChatController extends Controller
     }
 
     /**
+     * Edit an existing message (client re-encrypts updated payload).
+     */
+    public function edit(Request $request, int $id): JsonResponse
+    {
+        $message = Message::where('id', $id)
+            ->where('sender_id', $request->user()->id)
+            ->firstOrFail();
+
+        $validated = $request->validate([
+            'encrypted_payload' => 'required|string',
+            'iv' => 'required|string',
+            'mac' => 'nullable|string',
+        ]);
+
+        $message->update([
+            'encrypted_payload' => $validated['encrypted_payload'],
+            'iv' => $validated['iv'],
+            'mac' => $validated['mac'] ?? null,
+            'is_edited' => true,
+            'edited_at' => now(),
+        ]);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Message edited',
+            'data' => $message
+        ]);
+    }
+
+    /**
      * Toggle a reaction on a message.
      */
     public function react(Request $request, int $id): JsonResponse
@@ -115,6 +145,27 @@ class ChatController extends Controller
             'status' => 'success',
             'message' => $isPinned ? 'Message pinned' : 'Message unpinned',
             'data' => ['is_pinned' => $isPinned]
+        ]);
+    }
+
+    /**
+     * Get all pinned messages in the couple space.
+     */
+    public function pinned(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->couple_space_id) {
+            return response()->json(['status' => 'error', 'message' => 'No active couple space'], 404);
+        }
+
+        $pinned = Message::where('couple_space_id', $user->couple_space_id)
+            ->where('is_pinned', true)
+            ->with(['sender:id,name,avatar_url', 'reactions'])
+            ->get();
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $pinned
         ]);
     }
 
