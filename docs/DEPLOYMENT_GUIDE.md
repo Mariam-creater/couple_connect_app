@@ -1,6 +1,6 @@
-# Couple Connect: Railway Production Deployment Guide
+# Couple Connect: Render Deployment Guide (Free Tier Optimized)
 
-This guide walks you through deploying the **Couple Connect Laravel 12 Backend**, **Laravel Reverb WebSockets**, **Persistent S3/R2 Cloud Storage**, and connecting **Physical Android/iOS Flutter Devices**.
+This guide walks you through deploying the **Couple Connect Laravel 12 Backend** to **Render.com**, configuring **Real-Time WebSockets via Pusher Channels**, setting up **Persistent Media Storage via Cloudflare R2 / S3**, and connecting **Physical Android/iOS Flutter Devices**.
 
 ---
 
@@ -11,21 +11,22 @@ This guide walks you through deploying the **Couple Connect Laravel 12 Backend**
                       │   Flutter Mobile/Web Clients    │
                       │  (Device A  ◄═══►  Device B)    │
                       └───────┬─────────────────▲───────┘
-                              │ HTTPS           │ WSS (Port 443)
+                              │ HTTPS           │ WSS (Pusher Cloud Cluster)
                               ▼                 │
      ┌──────────────────────────────────────────┴─────────────────────────┐
-     │                      Railway.app Production                        │
+     │                      Render.com Web Service                        │
      │                                                                    │
      │  ┌─────────────────────────┐         ┌──────────────────────────┐  │
-     │  │  Laravel REST API       │         │  Laravel Reverb Daemon   │  │
-     │  │  - Auth / E2EE / Chat   │────────►│  - Real-Time WebSockets  │  │
-     │  │  - Document / Voice API │ Events  │  - Private Channels      │  │
+     │  │  Laravel 12 REST API    │         │  Pusher Channels Cloud   │  │
+     │  │  - Nginx + PHP-FPM      │────────►│  - Zero Server Overhead  │  │
+     │  │  - E2EE Chat & Voice    │ Events  │  - Instant WSS Delivery  │  │
+     │  │  - Auto-Cache & Migrates│         │  - 200k msgs/day (Free)  │  │
      │  └───────────┬─────────────┘         └──────────────────────────┘  │
      │              │                                                     │
-     │              │ MySQL TCP                                           │
+     │              │ MySQL TCP (Port 3306)                               │
      │              ▼                                                     │
      │  ┌─────────────────────────┐                                       │
-     │  │  Railway MySQL Database │                                       │
+     │  │  Render / Cloud MySQL   │                                       │
      │  └─────────────────────────┘                                       │
      └──────────────────────┬─────────────────────────────────────────────┘
                             │
@@ -33,112 +34,134 @@ This guide walks you through deploying the **Couple Connect Laravel 12 Backend**
      ┌────────────────────────────────────────────────────────────────────┐
      │         Cloudflare R2 / AWS S3 Persistent Storage                  │
      │  - Encrypted Voice Notes (.m4a/.aac/.wav)                          │
-     │  - Real PDF/DOCX/Images                                            │
-     │  - High-Speed Worldwide Direct Streaming / CDN                     │
+     │  - Documents (PDF, DOCX, ZIP) & Memory Vault Photos                │
+     │  - Free Egress Bandwidth & Instant Worldwide CDN Streaming         │
      └────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 2. Deploying Backend to Railway.app
+## 2. Deploying Backend to Render.com
 
-### Step A: Create Project on Railway
-1. Open [railway.com](https://railway.com) and log in.
-2. Click **+ New Project** -> **Deploy from GitHub repo**.
-3. Select `couple_connect_app` (or your repository) and choose the `backend` folder as the Root Directory.
+### Step A: Push Code to GitHub / GitLab
+Make sure your repository has the `backend/Dockerfile`, `backend/nginx.conf`, and `backend/docker-entrypoint.sh` files.
 
-### Step B: Add MySQL Database Plugin
-1. In your Railway project canvas, click **+ New** -> **Database** -> **Add MySQL**.
-2. Railway will automatically create the database and inject variables (`MYSQLHOST`, `MYSQLPORT`, `MYSQLUSER`, `MYSQLPASSWORD`, `MYSQLDATABASE`).
+### Step B: Create a Web Service on Render
+1. Log in to [dashboard.render.com](https://dashboard.render.com).
+2. Click **New +** -> **Web Service**.
+3. Select your GitHub repository (`couple_connect_app` or your repo).
+4. Configure service settings:
+   - **Name**: `couple-connect-backend`
+   - **Region**: Choose closest to you (e.g., `Frankfurt`, `Oregon`, `Singapore`)
+   - **Root Directory**: `backend`
+   - **Environment**: `Docker`
+   - **Plan**: `Free`
 
-### Step C: Configure Environment Variables
-Add the following variables in the **Variables** tab of your Railway backend service:
-
-```ini
-APP_NAME="Couple Connect"
-APP_ENV=production
-APP_KEY=base64:... # Generate via `php artisan key:generate --show`
-APP_DEBUG=false
-APP_URL=https://${{RAILWAY_PUBLIC_DOMAIN}}
-
-# Database (Automatically mapped from MySQL plugin)
-DB_CONNECTION=mysql
-DB_HOST=${{MYSQLHOST}}
-DB_PORT=${{MYSQLPORT}}
-DB_DATABASE=${{MYSQLDATABASE}}
-DB_USERNAME=${{MYSQLUSER}}
-DB_PASSWORD=${{MYSQLPASSWORD}}
-
-# Queue, Cache, Broadcast
-BROADCAST_CONNECTION=reverb
-FILESYSTEM_DISK=s3
-QUEUE_CONNECTION=database
-CACHE_STORE=database
-
-# Reverb WebSockets
-REVERB_APP_ID=couple_connect_app
-REVERB_APP_KEY=couple_connect_key
-REVERB_APP_SECRET=your_production_secure_secret_here
-REVERB_HOST=${{RAILWAY_PUBLIC_DOMAIN}}
-REVERB_PORT=443
-REVERB_SCHEME=https
-REVERB_SERVER_HOST=0.0.0.0
-REVERB_SERVER_PORT=8080
-
-# Cloud Media Storage (Cloudflare R2 or AWS S3)
-AWS_ACCESS_KEY_ID=YOUR_R2_OR_S3_ACCESS_KEY
-AWS_SECRET_ACCESS_KEY=YOUR_R2_OR_S3_SECRET_KEY
-AWS_DEFAULT_REGION=auto
-AWS_BUCKET=couple-connect-media
-AWS_USE_PATH_STYLE_ENDPOINT=true
-AWS_ENDPOINT=https://<YOUR_ACCOUNT_ID>.r2.cloudflarestorage.com
-AWS_URL=https://media.yourdomain.com
-```
+*(Alternatively, if using Render's Native PHP Environment without Docker:)*
+- **Build Command**: `./render-build.sh` (or `composer install --no-dev --optimize-autoloader && php artisan config:cache && php artisan route:cache && php artisan view:cache`)
+- **Start Command**: `./render-start.sh` (or `php artisan migrate --force && php artisan storage:link && php -S 0.0.0.0:$PORT -t public`)
 
 ---
 
-## 3. Persistent Media Storage Setup (Cloudflare R2)
+## 3. Environment Variables Configuration for Render
 
-Railway containers have ephemeral filesystems (files uploaded to local disk disappear on container redeploy). Cloudflare R2 provides zero-egress fee, persistent, lightning-fast media storage.
+In your Render Service dashboard, go to the **Environment** tab and add the following variables:
 
-1. Create a Cloudflare account and go to **R2 Object Storage**.
-2. Click **Create Bucket** -> Name it `couple-connect-media`.
-3. In **R2 Manage API Tokens**, create a token with **Object Read & Write** permissions.
-4. Copy the **Access Key ID**, **Secret Access Key**, and **Endpoint URL** into your Railway variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ENDPOINT`).
-5. (Optional) Connect a Custom Domain or enable R2 Public Access to allow instant audio/document streaming worldwide.
+| Key | Example / Description |
+|---|---|
+| `APP_NAME` | `"Couple Connect"` |
+| `APP_ENV` | `production` |
+| `APP_KEY` | `base64:...` *(Generate via `php artisan key:generate --show`)* |
+| `APP_DEBUG` | `false` |
+| `APP_URL` | `https://couple-connect-backend.onrender.com` *(Your Render URL)* |
+| `DB_CONNECTION` | `mysql` |
+| `DB_HOST` | `your-db-host.com` *(Render MySQL / Aiven / Supabase / PlanetScale)* |
+| `DB_PORT` | `3306` |
+| `DB_DATABASE` | `couple_connect` |
+| `DB_USERNAME` | `your_db_username` |
+| `DB_PASSWORD` | `your_db_password` |
+| `BROADCAST_CONNECTION` | `pusher` |
+| `PUSHER_APP_ID` | `YOUR_PUSHER_APP_ID` |
+| `PUSHER_APP_KEY` | `YOUR_PUSHER_APP_KEY` |
+| `PUSHER_APP_SECRET` | `YOUR_PUSHER_APP_SECRET` |
+| `PUSHER_APP_CLUSTER` | `eu` *(or `us2`, `mt1`, `ap1` depending on your Pusher app)* |
+| `PUSHER_SCHEME` | `https` |
+| `PUSHER_PORT` | `443` |
+| `FILESYSTEM_DISK` | `s3` |
+| `AWS_ACCESS_KEY_ID` | `YOUR_R2_ACCESS_KEY_ID` |
+| `AWS_SECRET_ACCESS_KEY` | `YOUR_R2_SECRET_ACCESS_KEY` |
+| `AWS_DEFAULT_REGION` | `auto` |
+| `AWS_BUCKET` | `couple-connect-media` |
+| `AWS_USE_PATH_STYLE_ENDPOINT` | `true` |
+| `AWS_ENDPOINT` | `https://<YOUR_CF_ACCOUNT_ID>.r2.cloudflarestorage.com` |
+| `AWS_URL` | `https://media.yourdomain.com` *(or public R2 `.r2.dev` bucket URL)* |
+| `QUEUE_CONNECTION` | `database` |
+| `CACHE_STORE` | `database` |
+| `SESSION_DRIVER` | `database` |
+| `RUN_MIGRATIONS` | `true` |
 
 ---
 
-## 4. Connecting Flutter Mobile Devices (Android / iOS)
+## 4. Real-Time WebSockets via Pusher Channels
 
-In the Flutter application, update [`ApiConstants`](file:///Applications/XAMPP/xamppfiles/htdocs/laravel/couple_connect/frontend/lib/core/constants/api_constants.dart) with your Railway URL:
+Using Pusher Channels eliminates the need to run background WebSockets daemons (like Reverb) on Render's Free tier:
+
+1. Create a free account at [pusher.com](https://pusher.com).
+2. Click **Create app** -> Name: `couple-connect` -> Select cluster (e.g. `eu` or `us2`).
+3. Under **App Keys**, copy `app_id`, `key`, `secret`, and `cluster`.
+4. Enter them in the Render Environment Variables (`PUSHER_APP_ID`, `PUSHER_APP_KEY`, etc.).
+5. Flutter clients connect securely over WSS (Port 443) with Sanctum token authentication at `${APP_URL}/api/v1/broadcasting/auth`.
+
+---
+
+## 5. Cloudflare R2 Persistent Storage Setup
+
+Cloudflare R2 provides S3-compatible, zero-egress-fee storage that persists across Render container restarts:
+
+1. In [dash.cloudflare.com](https://dash.cloudflare.com), navigate to **R2**.
+2. Click **Create bucket** -> Name: `couple-connect-media`.
+3. In **Manage R2 API Tokens**, create a token with **Object Read & Write** permissions.
+4. Copy:
+   - **Access Key ID** -> `AWS_ACCESS_KEY_ID`
+   - **Secret Access Key** -> `AWS_SECRET_ACCESS_KEY`
+   - **Endpoint** -> `AWS_ENDPOINT` (e.g., `https://<account_id>.r2.cloudflarestorage.com`)
+5. In Bucket Settings -> **Public Access**, enable **R2.dev subdomain** or attach a custom domain (e.g., `media.yourdomain.com`). Set this as `AWS_URL`.
+
+---
+
+## 6. Connecting Flutter Mobile Devices
+
+Update [`ApiConstants`](file:///Applications/XAMPP/xamppfiles/htdocs/laravel/couple_connect/frontend/lib/core/constants/api_constants.dart) with your Render backend URL and Pusher credentials:
 
 ```dart
 class ApiConstants {
-  // Replace with your Railway public domain:
-  static const String baseUrl = 'https://couple-connect-production.up.railway.app/api/v1';
+  // Replace with your Render public domain:
+  static const String baseUrl = 'https://couple-connect-backend.onrender.com/api/v1';
+
+  // Pusher WebSockets Credentials:
+  static const String pusherAppKey = 'YOUR_PUSHER_APP_KEY';
+  static const String pusherCluster = 'eu'; // match your Pusher cluster
 }
 ```
 
 ### Building the Mobile APK / iOS App
 ```bash
-# Build Android APK for physical device
-flutter build apk --release
+# Build Android APK for physical devices
+flutter build apk --release --dart-define=PUSHER_APP_KEY=YOUR_KEY --dart-define=PUSHER_APP_CLUSTER=eu
 
-# Run directly on plugged-in Android device
+# Run on connected device
 flutter run -d <device_id> --release
 ```
 
 ---
 
-## 5. Verifying Real-Time WebSockets & Voice Streaming
+## 7. Verifying Real-Time WebSockets & Voice Notes
 
-1. **User A** records a voice message and presses send:
-   - Voice note is recorded in AAC/M4A format.
-   - Flutter uploads file to `POST /api/v1/chat/voice`.
-   - Laravel uploads file to S3/R2 and saves record in MySQL.
-   - Laravel triggers `NewMessageEvent` implementing `ShouldBroadcastNow` on `private-couple.{id}`.
-2. **User B** (on physical device in another city/network):
-   - Receives `message.new` event via WebSocket connection over WSS (Port 443).
-   - Chat screen inserts message immediately without pulling or reloading.
-   - Taps play: streams audio instantly from Cloudflare R2 / S3 CDN.
+1. **User A records and sends voice note / document:**
+   - Flutter uploads to `POST /api/v1/chat/voice` or `POST /api/v1/chat/documents`.
+   - Laravel uploads directly to Cloudflare R2 bucket and persists metadata in MySQL.
+   - Laravel broadcasts `NewMessageEvent` to Pusher cluster on private channel `private-couple.{space_id}`.
+2. **User B on another network:**
+   - Receives instant `message.new` WebSocket event via Pusher over WSS.
+   - Chat UI updates seamlessly in real time.
+   - Taps audio play button: audio streams directly from Cloudflare R2 CDN with byte-range streaming support.

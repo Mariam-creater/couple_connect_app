@@ -26,24 +26,24 @@ class WebSocketService {
   bool get isConnected => _isConnected;
   int? get subscribedSpaceId => _subscribedSpaceId;
 
-  /// Initialize and connect to Laravel Reverb / Pusher WebSocket server
+  /// Initialize and connect to Pusher WebSocket server over secure WSS
   Future<void> connect({
-    String? host,
-    int? port,
     String? appKey,
-    String? scheme,
+    String? cluster,
+    String? authEndpoint,
   }) async {
     try {
       final token = await SecureTokenStorage().getToken();
-      final authEndpoint = ApiConstants.broadcastAuth;
-      final key = appKey ?? 'couple_connect_key';
+      final endpoint = authEndpoint ?? ApiConstants.broadcastAuth;
+      final key = appKey ?? ApiConstants.pusherAppKey;
+      final clusterName = cluster ?? ApiConstants.pusherCluster;
 
       if (!_isInitialized) {
         await _pusher.init(
           apiKey: key,
-          cluster: 'mt1',
+          cluster: clusterName,
           useTLS: true,
-          authEndpoint: authEndpoint,
+          authEndpoint: endpoint,
           authParams: {
             'headers': {
               'Accept': 'application/json',

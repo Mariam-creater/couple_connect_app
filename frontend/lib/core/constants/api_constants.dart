@@ -2,6 +2,10 @@ class ApiConstants {
   static const String baseUrl = 'http://localhost:8000/api/v1';
   static const String wsUrl = 'ws://localhost:8080/app/couple_connect_key';
 
+  // Pusher WebSockets Configuration (Render Free Tier Native Pusher Driver)
+  static const String pusherAppKey = String.fromEnvironment('PUSHER_APP_KEY', defaultValue: 'couple_connect_key');
+  static const String pusherCluster = String.fromEnvironment('PUSHER_APP_CLUSTER', defaultValue: 'mt1');
+
   // Auth & Profile
   static const String register = '$baseUrl/auth/register';
   static const String login = '$baseUrl/auth/login';

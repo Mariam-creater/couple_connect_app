@@ -220,7 +220,7 @@ class ChatController extends Controller
         }
 
         $filename = 'voice_' . Str::uuid() . '.' . $ext;
-        $disk = config('filesystems.default') === 's3' ? 's3' : 'public';
+        $disk = in_array(config('filesystems.default'), ['s3', 'r2']) ? config('filesystems.default') : 'public';
         $folder = 'chat_voices/' . $user->couple_space_id;
         $path = $file->storeAs($folder, $filename, $disk);
 
@@ -271,7 +271,7 @@ class ChatController extends Controller
         }
 
         $filename = Str::uuid() . '.' . $ext;
-        $disk = config('filesystems.default') === 's3' ? 's3' : 'public';
+        $disk = in_array(config('filesystems.default'), ['s3', 'r2']) ? config('filesystems.default') : 'public';
         $path = $file->storeAs($folder, $filename, $disk);
 
         $url = Storage::disk($disk)->url($path);
@@ -297,7 +297,7 @@ class ChatController extends Controller
 
     /**
      * Dedicated Real Document Upload Endpoint
-     * Stores in storage/app/public/chat_documents/{couple_space_id}/
+     * Stores in S3/R2 cloud storage (or local public fallback)
      */
     public function uploadDocument(Request $request): JsonResponse
     {
@@ -344,10 +344,15 @@ class ChatController extends Controller
         // Store in couple space document directory
         $spaceFolder = "chat_documents/{$user->couple_space_id}";
         $storedFilename = Str::uuid() . '.' . $ext;
-        $path = $file->storeAs($spaceFolder, $storedFilename, 'public');
+        $disk = in_array(config('filesystems.default'), ['s3', 'r2']) ? config('filesystems.default') : 'public';
+        $path = $file->storeAs($spaceFolder, $storedFilename, $disk);
 
-        $downloadUrl = url("api/v1/chat/documents/{$storedFilename}/download");
-        $fileUrl = Storage::url($path);
+        $fileUrl = Storage::disk($disk)->url($path);
+        if (str_starts_with($fileUrl, '/')) {
+            $baseUrl = rtrim(config('app.url', 'http://localhost:8000'), '/');
+            $fileUrl = $baseUrl . $fileUrl;
+        }
+        $downloadUrl = $fileUrl;
 
         // Create message
         $caption = $request->input('caption', "📄 [Document: {$originalName}]");

@@ -81,8 +81,13 @@ class MemoryController extends Controller
         if ($request->hasFile('file')) {
             $file = $request->file('file');
             $filename = Str::uuid() . '.' . $file->getClientOriginalExtension();
-            $path = $file->storeAs('memories', $filename, 'public');
-            $mediaPath = Storage::url($path);
+            $disk = in_array(config('filesystems.default'), ['s3', 'r2']) ? config('filesystems.default') : 'public';
+            $path = $file->storeAs('memories', $filename, $disk);
+            $mediaPath = Storage::disk($disk)->url($path);
+            if (str_starts_with($mediaPath, '/')) {
+                $baseUrl = rtrim(config('app.url', 'http://localhost:8000'), '/');
+                $mediaPath = $baseUrl . $mediaPath;
+            }
             $fileSize = $file->getSize();
         }
 

@@ -32,8 +32,8 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 # Set working directory
 WORKDIR /var/www/html
 
-# Copy source code
-COPY . /var/www/html
+# Copy backend source code into container
+COPY backend /var/www/html
 
 # Set directory permissions for Laravel
 RUN chown -R www-data:www-data /var/www/html \
@@ -43,12 +43,11 @@ RUN chown -R www-data:www-data /var/www/html \
 RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
 
 # Copy Nginx configuration and entrypoint
-COPY nginx.conf /etc/nginx/nginx.conf
-COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+COPY backend/nginx.conf /etc/nginx/nginx.conf
+COPY backend/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Expose default port
+# Expose default port (overridden dynamically by Render's $PORT)
 EXPOSE 10000
 
-# Run entrypoint
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
