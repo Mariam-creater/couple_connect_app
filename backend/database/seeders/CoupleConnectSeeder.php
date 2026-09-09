@@ -131,7 +131,8 @@ class CoupleConnectSeeder extends Seeder
             'elo_rating' => 1520,
             'wins' => 16,
             'losses' => 2,
-            'season_points' => 980,
+            'draws' => 1,
+            'rank_tier' => 'Gold',
         ]);
 
         // 3. Create Couple Space
